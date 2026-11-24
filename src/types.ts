@@ -31,7 +31,9 @@ export interface SourceFile {
   /** true when this file was found to hold the module's ILO list */
   hasIlos: boolean;
   /** Latest version of a file with this name is active; older versions are kept as history. */
-  status: 'active' | 'superseded';
+  /** active = in use; superseded = replaced by a newer upload; removed = deleted by you (passages and questions retired, answers kept) */
+  status: 'active' | 'superseded' | 'removed';
+  removedAt?: number;
   version: number;
   chunkCount: number;
   ocrCount: number;

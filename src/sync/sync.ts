@@ -97,6 +97,7 @@ export async function exportSnapshot(): Promise<Snapshot> {
 }
 
 const SEV = { active: 0, flagged: 1, retired: 2 } as const;
+const FILE_SEV = { active: 0, superseded: 1, removed: 2 } as const;
 
 /**
  * Write the merged snapshot into this device's database. Runs in one transaction and only replaces a
@@ -132,7 +133,7 @@ export async function applySnapshot(m: Snapshot): Promise<number> {
   for (const f of S.files) {
     const cur = await tx.objectStore('files').get(f.id);
     if (!cur) await put('files', f);
-    else if (f.status === 'superseded' && cur.status !== 'superseded') await put('files', { ...cur, status: 'superseded', blob: undefined });
+    else if (FILE_SEV[f.status] > FILE_SEV[cur.status]) await put('files', { ...cur, status: f.status, removedAt: f.removedAt, blob: undefined });
   }
   for (const c of S.chunks) {
     const cur = await tx.objectStore('chunks').get(c.id);
@@ -194,6 +195,7 @@ export async function syncOnce(remote: Remote, device = 'device'): Promise<SyncR
       }
     }
     const blobsUp = await pushBlobs(remote, device);
+    await pruneBlobs(remote, device);
     return { pulled, pushed, blobsUp };
   }
   throw new Error('Could not sync: the synced copy kept changing. Try again in a moment.');
@@ -217,6 +219,17 @@ async function pushBlobs(remote: Remote, device: string): Promise<number> {
     }
   }
   return n;
+}
+
+/** Delete PDFs of removed files from the synced copy (unless another live file has identical bytes). */
+async function pruneBlobs(remote: Remote, device: string): Promise<void> {
+  const files = await (await db()).getAll('files');
+  const live = new Set(files.filter((f) => f.status !== 'removed').map((f) => f.hash));
+  const gone = new Set(files.filter((f) => f.status === 'removed' && !live.has(f.hash)).map((f) => `${f.hash}.pdf`));
+  if (!gone.size) return;
+  for (const name of await remote.list('blobs')) {
+    if (gone.has(name)) await remote.remove(`blobs/${name}`, `remove a deleted file from ${device}`).catch(() => {});
+  }
 }
 
 /** Original PDF for a file: from this device, or downloaded once from the synced copy. */

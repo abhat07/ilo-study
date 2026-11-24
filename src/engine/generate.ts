@@ -89,7 +89,11 @@ function toItem(g: GenItemOut, moduleId: string, ilo: Ilo, chunk: Chunk, level: 
 export async function generateFor(moduleId: string, ilo: Ilo, chunk: Chunk, level: 1 | 2 | 3): Promise<Item[]> {
   const d = await db();
   const key = cacheKey(chunk, ilo.id, level);
-  if (await d.get('genlog', key)) return [];
+  const log = await d.get('genlog', key);
+  if (log) {
+    const live = (await d.getAllFromIndex('items', 'byCacheKey', key)).some((i) => i.status !== 'retired');
+    if (live || log.accepted === 0) return [];
+  }
   const types = TYPES_BY_LEVEL[level];
   const out = await callJSON<GenOut>({
     purpose: `generate L${level}`,
@@ -147,7 +151,8 @@ export async function pickTargets(moduleId: string, max: number): Promise<Target
     byModule('genlog', moduleId),
   ]);
   void d;
-  const done = new Set(logs.map((l) => l.cacheKey));
+  const liveKeys = new Set(items.filter((i) => i.status !== 'retired').map((i) => i.cacheKey));
+  const done = new Set(logs.filter((l) => l.accepted === 0 || liveKeys.has(l.cacheKey)).map((l) => l.cacheKey));
   const itemMap = new Map(items.map((i) => [i.id, i]));
   const targets: Target[] = [];
   for (const ilo of ilos) {

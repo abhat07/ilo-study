@@ -1,5 +1,8 @@
 import { byModule, db } from '../db';
-import { coverage } from '../ingest/pipeline';
+import { coverage, removeFile } from '../ingest/pipeline';
+import { syncNow, syncSettings } from '../sync/sync';
+import { toast } from './fun';
+import type { SourceFile } from '../types';
 import { calibration, estimateMastery, type MasteryEstimate } from '../engine/mastery';
 import { isGenerating } from '../engine/generate';
 import type { Ilo } from '../types';
@@ -85,9 +88,12 @@ export function ModulePage({ moduleId }: { moduleId: string }) {
           <h2>Material ({active.length} files)</h2>
           <ul class="small">
             {active.map((f) => (
-              <li key={f.id}>
-                <b>{f.name}</b> — {f.chunkCount} passages{f.ocrCount ? `, ${f.ocrCount} with OCR text` : ''}{f.version > 1 ? `, version ${f.version}` : ''}
-                {f.hasIlos && <span class="tag ok"> ILOs</span>}
+              <li key={f.id} class="file-row">
+                <span>
+                  <b>{f.name}</b> — {f.chunkCount} passages{f.ocrCount ? `, ${f.ocrCount} with OCR text` : ''}{f.version > 1 ? `, version ${f.version}` : ''}
+                  {f.hasIlos && <span class="tag ok"> ILOs</span>}
+                </span>
+                <button class="btn sm danger" onClick={() => confirmRemove(f)} aria-label={`Remove ${f.name}`}>Remove</button>
               </li>
             ))}
           </ul>
@@ -135,4 +141,17 @@ function IloRow({ ilo, m, cov, items }: { ilo: Ilo; m: MasteryEstimate; cov?: { 
       </details>
     </div>
   );
+}
+
+async function confirmRemove(f: SourceFile) {
+  const synced = syncSettings.configured();
+  const ok = confirm(
+    `Remove “${f.name}”?\n\nIts ${f.chunkCount} passages and any questions built on them will stop being used. Your past answers are kept.` +
+      (synced ? '\n\nIt will also be removed on your other devices, and its PDF deleted from your sync repository.' : '') +
+      '\n\nYou can upload it again later.',
+  );
+  if (!ok) return;
+  const r = await removeFile(f.id);
+  toast(`🗑 Removed ${f.name}: ${r.questions} question${r.questions === 1 ? '' : 's'} retired`);
+  if (synced) void syncNow('file removed');
 }

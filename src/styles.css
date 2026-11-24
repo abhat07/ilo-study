@@ -486,3 +486,7 @@ body[data-stage='retrieve'] .topbar .back, body[data-stage='retrieve'] .topbar .
 .spin-i { display: inline-block; animation: spin 1s linear infinite; }
 .steps { padding-left: 18px; }
 .steps li { margin: 6px 0; }
+
+.file-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.file-row:first-child { border-top: 0; }
+.file-row .btn { flex: none; }

@@ -6,7 +6,7 @@
  *  - sessions: keep the version with more answers (then the one that has ended)
  *  - modules: newest update wins; each module's ILO list is taken as a whole from whichever
  *    device confirmed it most recently (so deleting an ILO on one device propagates)
- *  - files: union; "superseded" wins over "active" (a newer upload replaced it somewhere)
+ *  - files: union; removed > superseded > active (a removal or newer upload on any device wins)
  *  - chunks (passages): newest update wins
  *  - items (questions): union; most severe status wins (retired > flagged > active); the FSRS
  *    schedule and seen-count are rebuilt from the merged answers when neither side has them all;
@@ -76,7 +76,8 @@ export function mergeSnapshots(a: Snapshot, b: Snapshot): Snapshot {
     else ilos.push(...unionBy(la, lb, (i) => i.id));
   }
 
-  const files = unionBy(A.files, B.files, (f) => f.id, (x, y) => (x.status === 'superseded' ? x : y.status === 'superseded' ? y : x));
+  const FILE_SEV = { active: 0, superseded: 1, removed: 2 } as const;
+  const files = unionBy(A.files, B.files, (f) => f.id, (x, y) => (FILE_SEV[y.status] > FILE_SEV[x.status] ? y : x));
   const chunks = unionBy(A.chunks, B.chunks, (c) => c.id, (x, y) => (y.updatedAt > x.updatedAt ? y : x));
   const attempts = unionBy(A.attempts, B.attempts, (t) => t.id, (x, y) => (y.disputed && !x.disputed ? y : x));
   const disputes = unionBy(A.disputes, B.disputes, (d) => d.id, (x, y) => (y.status === 'accepted' ? y : x));

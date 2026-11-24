@@ -192,6 +192,29 @@ export async function saveConfirmedIlos(moduleId: string, list: { text: string; 
   notifyChange();
 }
 
+/**
+ * Remove an uploaded file: its passages stop being used, questions built on them are retired, and the
+ * original PDF is dropped from this device (and from the synced copy on next sync). Your answers are kept,
+ * so mastery evidence already earned is not lost.
+ */
+export async function removeFile(fileId: string): Promise<{ passages: number; questions: number }> {
+  const d = await db();
+  const file = await d.get('files', fileId);
+  if (!file) return { passages: 0, questions: 0 };
+  const now = Date.now();
+  const chunks = await d.getAllFromIndex('chunks', 'byFile', fileId);
+  const ids = new Set(chunks.map((c) => c.id));
+  const items = (await byModule('items', file.moduleId)).filter((i) => ids.has(i.source.chunkId) && i.status !== 'retired');
+  const tx = d.transaction(['files', 'chunks', 'items', 'events'], 'readwrite');
+  await tx.objectStore('files').put({ ...file, status: 'removed', removedAt: now, blob: undefined });
+  for (const c of chunks) if (c.status !== 'removed') await tx.objectStore('chunks').put({ ...c, status: 'removed', updatedAt: now });
+  for (const it of items) await tx.objectStore('items').put({ ...it, status: 'retired', flagReason: `File removed: ${file.name}` });
+  await tx.objectStore('events').put({ id: uid('ev_'), moduleId: file.moduleId, at: now, fileName: file.name, summary: `removed: ${chunks.length} passages and ${items.length} questions retired` });
+  await tx.done;
+  notifyChange();
+  return { passages: chunks.length, questions: items.length };
+}
+
 export async function markIlosPending(moduleId: string): Promise<void> {
   const d = await db();
   const mod = (await d.get('modules', moduleId))!;

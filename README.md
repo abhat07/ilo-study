@@ -132,6 +132,8 @@ Written answers are the main cost. A session with 5 of them costs about 10p, and
 5. **What I know.** Shows each ILO's mastery estimate in plain language, the evidence behind it, your
    calibration, uploads, held-back questions and disputes.
 
+**Removing a file:** What I know → Material → **Remove**. Its passages stop being used and questions built on them are retired, but your past answers are kept. With sync on, the removal reaches your other devices and the PDF is deleted from the sync repository; the repository's commit history still has it until you rewrite that history. You can upload the file again later and get fresh questions.
+
 Re-uploading a file with the same name compares it with the previous version. New passages are added and changed
 or removed passages are found. Questions built on them are **held back** (status `flagged`) rather than deleted.
 Your answers are never deleted.

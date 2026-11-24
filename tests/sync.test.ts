@@ -163,3 +163,66 @@ describe('sync across devices', () => {
     expect(await count('attempts')).toBe(1);
   });
 });
+
+import { removeFile } from '../src/ingest/pipeline';
+import { pickTargets } from '../src/engine/generate';
+
+describe('removing a file', () => {
+  it('retires its questions everywhere, keeps answers, and deletes the PDF from the synced copy', async () => {
+    devices.clear();
+    const remote = new MemoryRemote();
+    use('mac');
+    const d = await db();
+    await d.put('modules', mod);
+    await d.put('ilos', ilo(1, 'Describe PCR'));
+    await d.put('files', {
+      id: 'f-cv', moduleId: mod.id, name: 'My_CV.pdf', kind: 'pdf', size: 3, hash: 'cvhash', uploadedAt: T0, hasIlos: false,
+      status: 'active', version: 1, chunkCount: 1, ocrCount: 0, blob: new Blob([new Uint8Array([1, 2, 3])], { type: 'application/pdf' }),
+    });
+    await d.put('chunks', {
+      id: 'My_CV.pdf|p1', moduleId: mod.id, fileId: 'f-cv', fileName: 'My_CV.pdf', locator: { kind: 'page', page: 1 }, text: 'cv text',
+      hash: 'h1', ocr: false, iloIds: ['AMB-01'], mappedBy: 'ai', status: 'active', updatedAt: T0,
+    });
+    await d.put('items', { ...item('q-cv'), source: { ...item('q-cv').source, chunkId: 'My_CV.pdf|p1' } });
+    await answer('q-cv', 'a-cv', T0 + 1000, 1);
+    await syncOnce(remote, 'mac');
+    expect(await remote.list('blobs')).toEqual(['cvhash.pdf']);
+
+    use('phone');
+    await syncOnce(remote, 'phone');
+    expect((await (await db()).get('files', 'f-cv'))!.status).toBe('active');
+
+    use('mac');
+    const r = await removeFile('f-cv');
+    expect(r.questions).toBe(1);
+    await syncOnce(remote, 'mac');
+    expect(await remote.list('blobs')).toEqual([]);
+
+    use('phone');
+    await syncOnce(remote, 'phone');
+    const pd = await db();
+    expect((await pd.get('files', 'f-cv'))!.status).toBe('removed');
+    expect((await pd.get('chunks', 'My_CV.pdf|p1'))!.status).toBe('removed');
+    expect((await pd.get('items', 'q-cv'))!.status).toBe('retired');
+    expect(await count('attempts')).toBe(1); // answers kept
+  });
+
+  it('lets a re-uploaded passage get new questions after its old ones were retired', async () => {
+    devices.clear();
+    use('mac');
+    const d = await db();
+    await d.put('modules', mod);
+    await d.put('ilos', ilo(1, 'Describe PCR'));
+    const chunk = {
+      id: 'L1.pdf|p1', moduleId: mod.id, fileId: 'f1', fileName: 'L1.pdf', locator: { kind: 'page' as const, page: 1 },
+      text: 'Denaturation at 95 C separates the two strands of the template DNA during each PCR cycle.', hash: 'abc', ocr: false,
+      iloIds: ['AMB-01'], mappedBy: 'ai' as const, status: 'active' as const, updatedAt: T0,
+    };
+    await d.put('chunks', chunk);
+    const key = 'abc|AMB-01|L1';
+    await d.put('genlog', { cacheKey: key, moduleId: mod.id, at: T0, accepted: 1, rejected: 0, rejectReasons: [] });
+    await d.put('items', { ...item('old', T0, key), status: 'retired' });
+    const targets = await pickTargets(mod.id, 5);
+    expect(targets.map((t) => t.chunk.id)).toContain('L1.pdf|p1');
+  });
+});

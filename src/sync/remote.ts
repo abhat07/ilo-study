@@ -14,6 +14,8 @@ export interface Remote {
   put(path: string, bytes: Uint8Array, sha: string | null, message: string): Promise<string>;
   /** names of files in a folder ([] if it doesn't exist) */
   list(dir: string): Promise<string[]>;
+  /** delete a file if it exists */
+  remove(path: string, message: string): Promise<void>;
 }
 
 export class ConflictError extends Error {}
@@ -86,6 +88,15 @@ export class GitHubRemote implements Remote {
     return (await res.json()).content.sha;
   }
 
+  async remove(path: string, message: string): Promise<void> {
+    const meta = await this.req(path);
+    if (meta.status === 404) return;
+    if (!meta.ok) throw new Error(`GitHub error ${meta.status}`);
+    const { sha } = await meta.json();
+    const res = await this.req(path, { method: 'DELETE', body: JSON.stringify({ message, sha }) });
+    if (!res.ok && res.status !== 404) throw new Error(`GitHub error ${res.status}`);
+  }
+
   async list(dir: string): Promise<string[]> {
     const res = await this.req(dir);
     if (res.status === 404) return [];
@@ -110,6 +121,9 @@ export class MemoryRemote implements Remote {
     const next = `sha${++this.n}`;
     this.files.set(path, { bytes: bytes.slice(), sha: next });
     return next;
+  }
+  async remove(path: string) {
+    this.files.delete(path);
   }
   async list(dir: string) {
     return [...this.files.keys()].filter((k) => k.startsWith(dir + '/')).map((k) => k.slice(dir.length + 1));
