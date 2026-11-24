@@ -11,8 +11,21 @@ import { Session } from './ui/Session';
 import { ModulePage } from './ui/ModulePage';
 import { topUpPool } from './engine/generate';
 import { mapModule } from './ingest/pipeline';
+import { applyTheme } from './settings';
 
-registerSW({ immediate: true });
+applyTheme();
+
+// Installed apps keep a cached copy. Check for a new version when the app is opened, every time it comes back
+// to the foreground, and every 30 minutes; with autoUpdate the page reloads itself once the new version is ready.
+registerSW({
+  immediate: true,
+  onRegisteredSW(_url, reg) {
+    if (!reg) return;
+    const check = () => reg.update().catch(() => {});
+    setInterval(check, 30 * 60_000);
+    document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && check());
+  },
+});
 
 // Night palette 21:00–06:00: less short-wavelength (blue) light and lower luminance in the evening.
 function setTimeOfDay(): void {

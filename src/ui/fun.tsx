@@ -8,15 +8,16 @@ export interface Theme {
   emoji: string;
 }
 
+// Module colours come from the active palette (CSS variables), so they change with Settings → Look.
 const THEMES: Record<string, Theme> = {
-  AMB: { accent: '#f97316', accent2: '#fbbf24', emoji: '🧬' },
-  GEN: { accent: '#ea580c', accent2: '#f43f5e', emoji: '🫛' },
-  BIP: { accent: '#f59e0b', accent2: '#fde047', emoji: '💻' },
+  AMB: { accent: 'var(--mod1a)', accent2: 'var(--mod1b)', emoji: '🧬' },
+  GEN: { accent: 'var(--mod2a)', accent2: 'var(--mod2b)', emoji: '🫛' },
+  BIP: { accent: 'var(--mod3a)', accent2: 'var(--mod3b)', emoji: '💻' },
 };
 const FALLBACK: Theme[] = [
-  { accent: '#fb923c', accent2: '#fdba74', emoji: '🔬' },
-  { accent: '#dc2626', accent2: '#f97316', emoji: '🧪' },
-  { accent: '#d97706', accent2: '#facc15', emoji: '🦠' },
+  { accent: 'var(--mod3a)', accent2: 'var(--mod3b)', emoji: '🔬' },
+  { accent: 'var(--mod2a)', accent2: 'var(--mod2b)', emoji: '🧪' },
+  { accent: 'var(--mod1a)', accent2: 'var(--mod1b)', emoji: '🦠' },
 ];
 
 export function themeFor(m: Pick<Module, 'short'>): Theme {
@@ -33,14 +34,14 @@ export function themeStyle(t: Theme): Record<string, string> {
 export function MasteryRing({ value, theme, size = 58 }: { value: number; theme: Theme; size?: number }) {
   const r = (size - 8) / 2;
   const c = 2 * Math.PI * r;
-  const id = `rg-${theme.accent.slice(1)}`;
+  const id = `rg-${theme.accent.replace(/[^a-z0-9]/gi, '')}`;
   return (
     <div class="ring" style={{ width: size, height: size }} aria-label={`Average mastery ${Math.round(value * 100)}%`}>
       <svg width={size} height={size}>
         <defs>
           <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color={theme.accent} />
-            <stop offset="1" stop-color={theme.accent2} />
+            <stop offset="0" style={{ stopColor: theme.accent }} />
+            <stop offset="1" style={{ stopColor: theme.accent2 }} />
           </linearGradient>
         </defs>
         <circle class="track" cx={size / 2} cy={size / 2} r={r} />
@@ -59,7 +60,11 @@ export function MasteryRing({ value, theme, size = 58 }: { value: number; theme:
   );
 }
 
-const COLOURS = ['#f97316', '#fb923c', '#fbbf24', '#fde047', '#ea580c', '#ffffff', '#fdba74'];
+function palette(): string[] {
+  const cs = getComputedStyle(document.documentElement);
+  const v = (n: string) => cs.getPropertyValue(n).trim();
+  return [v('--brand'), v('--brand-2'), v('--brand-3'), v('--brand-hi'), v('--brand-deep'), '#ffffff', v('--mod2a')].filter(Boolean);
+}
 
 /** A short confetti burst from a point (or the centre-top of the screen). Respects reduced-motion via CSS. */
 export function confetti(x = window.innerWidth / 2, y = window.innerHeight / 3, count = 36): void {
@@ -68,6 +73,7 @@ export function confetti(x = window.innerWidth / 2, y = window.innerHeight / 3, 
   host.className = 'confetti';
   host.style.left = `${x}px`;
   host.style.top = `${y}px`;
+  const COLOURS = palette();
   for (let i = 0; i < count; i++) {
     const p = document.createElement('i');
     const angle = Math.random() * Math.PI * 2;

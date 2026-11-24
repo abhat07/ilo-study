@@ -9,7 +9,11 @@ const K = {
   notice: 'ilo.dataNoticeAcceptedAt',
   mock: 'ilo.mock',
   name: 'ilo.name',
+  theme: 'ilo.theme',
 };
+
+export const THEMES = ['brass', 'clay', 'sage', 'tide', 'ember'] as const;
+export type ThemeName = (typeof THEMES)[number];
 
 export const settings = {
   getApiKey(): string {
@@ -35,6 +39,14 @@ export const settings = {
   setName(name: string): void {
     localStorage.setItem(K.name, name.trim().slice(0, 40));
   },
+  getTheme(): ThemeName {
+    const t = localStorage.getItem(K.theme) as ThemeName | null;
+    return t && (THEMES as readonly string[]).includes(t) ? t : 'brass';
+  },
+  setTheme(t: ThemeName): void {
+    localStorage.setItem(K.theme, t);
+    applyTheme();
+  },
   noticeAccepted(): boolean {
     return !!localStorage.getItem(K.notice);
   },
@@ -47,14 +59,23 @@ export const settings = {
   },
   /** Settings that are safe to include in a backup file (no API key). */
   exportable(): Record<string, string | null> {
-    return { cap: localStorage.getItem(K.cap), notice: localStorage.getItem(K.notice), name: localStorage.getItem(K.name) };
+    return { cap: localStorage.getItem(K.cap), notice: localStorage.getItem(K.notice), name: localStorage.getItem(K.name), theme: localStorage.getItem(K.theme) };
   },
   importExportable(v: Record<string, string | null>): void {
     if (v.cap != null) localStorage.setItem(K.cap, v.cap);
     if (v.notice != null) localStorage.setItem(K.notice, v.notice);
     if (v.name != null) localStorage.setItem(K.name, v.name);
+    if (v.theme != null) localStorage.setItem(K.theme, v.theme);
   },
 };
+
+/** Apply the chosen palette to <html data-theme> and the browser UI colour. */
+export function applyTheme(): void {
+  const t = settings.getTheme();
+  document.documentElement.dataset.theme = t;
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg || '#0c0e12');
+}
 
 export function maskKey(key: string): string {
   if (!key) return '';

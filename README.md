@@ -130,7 +130,7 @@ The research on colour and learning is uneven, so each choice notes how strong i
 
 | Stage | Colour | Why | Evidence |
 |---|---|---|---|
-| Home / starting | Black + warm orange | Pleasant, warm "emotional design" raises intrinsic motivation and retention | Moderate: meta-analyses Brom et al. 2018; Wong & Adesope 2021 (retention g ≈ 0.35 for emotional design overall) |
+| Home / starting | A calm palette of your choice (Settings → Look: Ink & brass by default, Terracotta, Sage, Tide, Ember) | Pleasant "emotional design" raises intrinsic motivation and retention | Moderate: meta-analyses Brom et al. 2018; Wong & Adesope 2021 (retention g ≈ 0.35 for emotional design overall) |
 | Answering and reading (question, options, slide passage, explanations) | **Paper card: dark text on warm off-white** during the day | Dark-on-light ("positive polarity") gives better reading, proofreading and comprehension than light-on-dark | **Strong**, replicated: Buchner & Baumgartner 2007; Piepenbrock et al. 2013, 2014; Dobres et al. 2016 |
 | While answering | Brand gradient switched off, calm top bar | Less competing salience while retrieving (signalling / cut extraneous load) | Theory-led (Mayer's signalling and coherence principles) |
 | Correct | Green | Conventional meaning, fastest to recognise | Convention |

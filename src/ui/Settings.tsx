@@ -3,9 +3,36 @@ import { db, notifyChange } from '../db';
 import { monthKey } from '../ai/client';
 import { MODELS, USD_TO_GBP } from '../ai/pricing';
 import { exportBackup, importBackup } from '../backup';
-import { settings } from '../settings';
+import { THEMES, settings, type ThemeName } from '../settings';
 import { TopBar, useAi, useLive } from './common';
 import { DataNotice, KeyAndCap } from './Setup';
+
+const THEME_INFO: Record<ThemeName, { name: string; desc: string; sw: string[] }> = {
+  brass: { name: 'Ink & brass', desc: 'Muted gold on ink black', sw: ['#0c0e12', '#c9a45c', '#e8d3a8', '#6fa39b'] },
+  clay: { name: 'Terracotta', desc: 'Earthy clay and sand', sw: ['#110f0e', '#c8775a', '#e0b48a', '#9aa77a'] },
+  sage: { name: 'Sage', desc: 'Soft green and wheat', sw: ['#0d0f0e', '#8fae8b', '#d6c79a', '#c08a6a'] },
+  tide: { name: 'Tide', desc: 'Deep teal and sand', sw: ['#0b0f10', '#5fa8a0', '#d9c4a0', '#c9a45c'] },
+  ember: { name: 'Ember', desc: 'The original bright orange', sw: ['#09090a', '#f97316', '#fbbf24', '#f43f5e'] },
+};
+
+function LookCard() {
+  const [t, setT] = useState(settings.getTheme());
+  return (
+    <div class="card">
+      <h2>🎨 Look</h2>
+      <p class="muted small">Colour palette for the app. Reading cards, feedback colours and night mode stay the same in every palette.</p>
+      <div class="theme-pick">
+        {THEMES.map((name) => (
+          <button key={name} class={t === name ? 'on' : ''} onClick={() => { settings.setTheme(name); setT(name); notifyChange(); }}>
+            <div class="sw">{THEME_INFO[name].sw.map((c) => <i style={{ background: c }} />)}</div>
+            <div style={{ fontWeight: 700 }}>{THEME_INFO[name].name}</div>
+            <div class="small muted">{THEME_INFO[name].desc}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function NameCard() {
   const [name, setName] = useState(settings.getName());
@@ -56,6 +83,7 @@ export function Settings() {
     <>
       <TopBar title="Settings" back="/" />
       <div class="wrap">
+        <LookCard />
         <NameCard />
         <KeyAndCap />
 
@@ -119,6 +147,16 @@ export function Settings() {
             </label>
           </div>
           {msg && <div class="okbox small" style={{ marginTop: 8 }}>{msg}</div>}
+        </div>
+
+        <div class="card">
+          <h2>Version</h2>
+          <p class="small muted">Built {__APP_BUILD__}. The installed app checks for updates whenever you open it.</p>
+          <button class="btn sm" onClick={async () => {
+            const reg = await navigator.serviceWorker?.getRegistration();
+            await reg?.update().catch(() => {});
+            location.reload();
+          }}>Check for update now</button>
         </div>
 
         {import.meta.env.DEV && (

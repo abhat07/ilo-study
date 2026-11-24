@@ -5,6 +5,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig({
   // Relative paths so the built app works at any address (e.g. https://name.github.io/ilo-study/).
   base: './',
+  // Shown in Settings so you can tell which version is running.
+  define: { __APP_BUILD__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC') },
   plugins: [
     preact(),
     VitePWA({
