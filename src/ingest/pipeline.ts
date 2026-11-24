@@ -207,7 +207,8 @@ export async function removeFile(fileId: string): Promise<{ passages: number; qu
   const items = (await byModule('items', file.moduleId)).filter((i) => ids.has(i.source.chunkId) && i.status !== 'retired');
   const tx = d.transaction(['files', 'chunks', 'items', 'events'], 'readwrite');
   await tx.objectStore('files').put({ ...file, status: 'removed', removedAt: now, blob: undefined });
-  for (const c of chunks) if (c.status !== 'removed') await tx.objectStore('chunks').put({ ...c, status: 'removed', updatedAt: now });
+  // erase the text too, so a removed file's content is gone from this device and from the synced copy
+  for (const c of chunks) if (c.status !== 'removed' || c.text) await tx.objectStore('chunks').put({ ...c, status: 'removed', text: '', updatedAt: now });
   for (const it of items) await tx.objectStore('items').put({ ...it, status: 'retired', flagReason: `File removed: ${file.name}` });
   await tx.objectStore('events').put({ id: uid('ev_'), moduleId: file.moduleId, at: now, fileName: file.name, summary: `removed: ${chunks.length} passages and ${items.length} questions retired` });
   await tx.done;
@@ -294,3 +295,20 @@ export async function coverage(moduleId: string): Promise<Coverage[]> {
 }
 
 export type { Item };
+
+/** One-time clean-up: erase passage text left behind by files removed before text-erasing existed. */
+export async function scrubRemovedFiles(): Promise<number> {
+  const d = await db();
+  const removed = new Set((await d.getAll('files')).filter((f) => f.status === 'removed').map((f) => f.id));
+  if (!removed.size) return 0;
+  const now = Date.now();
+  let n = 0;
+  for (const c of await d.getAll('chunks')) {
+    if (removed.has(c.fileId) && c.text) {
+      await d.put('chunks', { ...c, status: 'removed', text: '', updatedAt: now });
+      n++;
+    }
+  }
+  if (n) notifyChange();
+  return n;
+}

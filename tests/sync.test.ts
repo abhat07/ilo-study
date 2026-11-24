@@ -203,6 +203,7 @@ describe('removing a file', () => {
     const pd = await db();
     expect((await pd.get('files', 'f-cv'))!.status).toBe('removed');
     expect((await pd.get('chunks', 'My_CV.pdf|p1'))!.status).toBe('removed');
+    expect((await pd.get('chunks', 'My_CV.pdf|p1'))!.text).toBe('');
     expect((await pd.get('items', 'q-cv'))!.status).toBe('retired');
     expect(await count('attempts')).toBe(1); // answers kept
   });
