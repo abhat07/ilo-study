@@ -56,6 +56,38 @@ network address. Everything works except offline mode.
 
 ---
 
+## Sync across devices
+
+Settings → **🔄 Sync across devices** keeps uploads, ILOs, questions, progress, XP and spend the same on every
+device. The data goes through a **private GitHub repository** (e.g. `abhat07/ilo-study-data`):
+
+* `sync/data.json.gz`: everything except original PDFs, as one gzip-compressed snapshot.
+* `blobs/<sha256>.pdf`: original PDFs. Each is uploaded once and downloaded on another device only when you
+  press "Show original slide".
+
+**Setup, once per device:** create a fine-grained token with *Only select repositories → ilo-study-data* and
+*Contents: Read and write*, then paste the repository name and the token into the Sync card. The token is
+stored only in that browser, like the API key, and is never put in backups or the synced copy. The app refuses
+to sync to a public repository.
+
+**When it syncs:** when the app opens, when it returns to the foreground, 20 s after changes (an upload, an
+answer, confirming ILOs), right after a session ends, every 5 minutes, and from **Sync now**.
+
+**How merging works** (`src/sync/merge.ts`): pull, then merge with this device, then apply locally, then push
+if anything changed. If another device pushed in the meantime, it merges again.
+
+* Answers, sessions, spend, upload history and disputes are only ever added, so they are combined (union).
+* If two devices answered the same question offline, its spaced-repetition schedule is rebuilt from the combined
+  answers. Replay has no random fuzz, so every device computes the same schedule.
+* A module's ILO list is taken whole from the device that confirmed it most recently, so deletions propagate.
+  Passages: the newest edit wins. Questions keep their strictest status (retired > flagged > active).
+* Duplicate questions generated for the same passage on two devices: the unanswered copies are retired.
+* Applying a merge only ever adds or updates records. It never wipes, so work done during a sync is kept and
+  goes up next time.
+
+The repository's commit history doubles as a versioned backup. Six two-device scenarios are covered by
+`tests/sync.test.ts`.
+
 ## API key and spending cap
 
 1. Create an API key in the Anthropic Console (console.anthropic.com).
@@ -231,7 +263,8 @@ Stack: Vite + TypeScript + Preact, `idb`, `pdfjs-dist`, `jszip`, `tesseract.js`,
 1. **API calls to Anthropic**, and only after you accept the notice. Each call carries the text of one passage
    (question writing), a batch of 25 passages cut to 900 characters each (ILO matching), the ILO-like passages
    (AI ILO search, only if the local parser finds none), or a question + rubric + passage + your answer (marking).
-2. **OCR engine download.** The first OCR run downloads the Tesseract engine and English data from jsDelivr.
+2. **Sync (if you turn it on).** The synced copy above goes to your private GitHub repository.
+3. **OCR engine download.** The first OCR run downloads the Tesseract engine and English data from jsDelivr.
    This is a download only: no content is sent.
 
 Nothing else. There are no accounts and no analytics.

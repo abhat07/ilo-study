@@ -150,7 +150,7 @@ function AddModule({ onDone }: { onDone: () => void }) {
     if (!/^[A-Z0-9]{2,8}$/.test(sh)) return setErr('Short name: 2–8 letters or digits, e.g. BIP.');
     const d = await db();
     if (await d.get('modules', code)) return setErr('That module code already exists.');
-    await d.put('modules', { id: code, short: sh, name: name.trim(), createdAt: Date.now(), iloStatus: 'none' });
+    await d.put('modules', { id: code, short: sh, name: name.trim(), createdAt: Date.now(), updatedAt: Date.now(), iloStatus: 'none' });
     notifyChange();
     onDone();
   };

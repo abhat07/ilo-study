@@ -44,3 +44,17 @@ export function reviveCard(card: Card): Card {
 }
 
 export { State };
+
+const replayer = new FSRS({ request_retention: 0.9, enable_fuzz: false, maximum_interval: 180 });
+
+/**
+ * Rebuild a question's FSRS card from its answer history (used when two devices both answered it).
+ * No fuzz, so every device computes exactly the same schedule.
+ */
+export function replayCard(history: { at: number; score: number; confidence: Confidence }[], createdAt: number): Card {
+  let card = createEmptyCard(new Date(createdAt));
+  for (const h of [...history].sort((a, b) => a.at - b.at)) {
+    card = replayer.next(card, new Date(h.at), gradeFor(h.score, h.confidence)).card;
+  }
+  return card;
+}

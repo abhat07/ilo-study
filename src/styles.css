@@ -482,3 +482,7 @@ body[data-stage='retrieve'] .topbar .back, body[data-stage='retrieve'] .topbar .
 .theme-pick button.on { border-color: var(--brand); }
 .theme-pick .sw { display: flex; gap: 4px; margin-bottom: 6px; }
 .theme-pick .sw i { width: 22px; height: 22px; border-radius: 7px; display: block; }
+
+.spin-i { display: inline-block; animation: spin 1s linear infinite; }
+.steps { padding-left: 18px; }
+.steps li { margin: 6px 0; }

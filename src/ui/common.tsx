@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { onDataChange } from '../db';
 import { aiStatus, type AiStatus } from '../ai/client';
+import { onSyncStatus, syncStatus, type SyncStatus } from '../sync/sync';
 import { locatorLabel } from '../ingest/text';
 import type { Locator } from '../types';
 
@@ -36,8 +37,15 @@ export function useAi(): AiStatus | undefined {
   return useLive(aiStatus);
 }
 
+export function useSync(): SyncStatus {
+  const [s, setS] = useState<SyncStatus>(syncStatus());
+  useEffect(() => onSyncStatus(setS), []);
+  return s;
+}
+
 export function TopBar(props: { title: string; back?: string; children?: ComponentChildren }) {
   const ai = useAi();
+  const sync = useSync();
   return (
     <div class="topbar">
       {props.back !== undefined && (
@@ -47,6 +55,16 @@ export function TopBar(props: { title: string; back?: string; children?: Compone
       )}
       <h1>{props.back === undefined && <span class="logo" aria-hidden="true">🧠</span>}{props.title}</h1>
       {props.children}
+      {sync.state !== 'off' && (
+        <button
+          class={'chip' + (sync.state === 'error' ? ' warn' : '')}
+          onClick={() => go('/settings')}
+          title={sync.state === 'error' ? sync.error : sync.state === 'syncing' ? 'Syncing…' : `Synced${sync.last ? ' ' + new Date(sync.last).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''}`}
+          aria-label="Sync status"
+        >
+          {sync.state === 'syncing' ? <span class="spin-i">⟳</span> : sync.state === 'error' ? '⚠' : '☁✓'}
+        </button>
+      )}
       {ai && (
         <button
           class={'chip' + (ai.cap !== null && ai.spent >= ai.cap * 0.9 ? ' warn' : '')}

@@ -12,6 +12,7 @@ import {
 import { Bar, Spinner, TopBar, go } from './common';
 import { ClozeInput, McqInput, OrderInput, ShortInput, initialOrder, seededOrder } from './answers';
 import { SourceView } from './SourceView';
+import { syncNow } from '../sync/sync';
 import { confetti, praise, toast } from './fun';
 import { achievements, loadGame, xpForAttempt, type GameState } from '../engine/game';
 
@@ -167,6 +168,7 @@ export function Session({ moduleId }: { moduleId: string }) {
     const it = await nextItem(ctx);
     if (it) return show(it);
     setSummary(await endSession(ctx));
+    void syncNow('session finished');
     await celebrate();
     setPhase('summary');
   };
@@ -175,6 +177,7 @@ export function Session({ moduleId }: { moduleId: string }) {
     const ctx = ctxRef.current;
     if (!ctx || ctx.record.attemptIds.length === 0) return go('/');
     setSummary(await endSession(ctx));
+    void syncNow('session finished');
     await celebrate();
     setPhase('summary');
   };

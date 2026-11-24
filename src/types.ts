@@ -12,6 +12,10 @@ export interface Module {
   short: string; // e.g. AMB
   name: string;
   createdAt: number;
+  /** last change to this record (sync: newest wins) */
+  updatedAt?: number;
+  /** when the ILO list was last confirmed (sync: newest list wins as a whole) */
+  ilosAt?: number;
   /** none = no ILOs yet; pending = parsed, awaiting the student's confirmation; confirmed = content can be generated */
   iloStatus: 'none' | 'pending' | 'confirmed';
 }

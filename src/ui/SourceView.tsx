@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { db } from '../db';
 import type { Item } from '../types';
 import { renderStoredPdfPage } from '../ingest/extract';
+import { ensureBlob, syncSettings } from '../sync/sync';
 import { Spinner, useLive, where } from './common';
 
 /** Highlight the quoted evidence inside the passage text. */
@@ -27,10 +28,12 @@ export function SourceView({ item }: { item: Item }) {
   const loc = chunk?.locator ?? item.source.locator;
 
   const showPage = async () => {
-    if (!file?.blob || loc.kind !== 'page') return;
+    if (!file || loc.kind !== 'page') return;
     setImgBusy(true);
     try {
-      const c = await renderStoredPdfPage(file.blob, loc.page, 1000);
+      const blob = await ensureBlob(file);
+      if (!blob) return;
+      const c = await renderStoredPdfPage(blob, loc.page, 1000);
       setImg(c.toDataURL('image/png'));
     } finally {
       setImgBusy(false);
@@ -50,7 +53,7 @@ export function SourceView({ item }: { item: Item }) {
       {open && chunk && (
         <div>
           <div class="passage small"><Highlighted text={chunk.text} quote={item.source.quote} /></div>
-          {file?.blob && loc.kind === 'page' && !img && (
+          {file && (file.blob || (file.kind === 'pdf' && syncSettings.configured())) && loc.kind === 'page' && !img && (
             <button class="btn sm" style={{ marginTop: 6 }} onClick={showPage} disabled={imgBusy}>
               {imgBusy ? 'Rendering…' : 'Show original slide'}
             </button>

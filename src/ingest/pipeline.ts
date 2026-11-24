@@ -176,7 +176,8 @@ export async function saveConfirmedIlos(moduleId: string, list: { text: string; 
     await tx.objectStore('ilos').put(ilo);
   }
   for (const i of existing) if (!keep.has(i.id)) await tx.objectStore('ilos').delete(i.id);
-  await tx.objectStore('modules').put({ ...mod, iloStatus: 'confirmed' });
+  const at = Date.now();
+  await tx.objectStore('modules').put({ ...mod, iloStatus: 'confirmed', updatedAt: at, ilosAt: at });
   await tx.done;
 
   // Items whose ILOs were all removed are retired (history kept).
@@ -187,14 +188,14 @@ export async function saveConfirmedIlos(moduleId: string, list: { text: string; 
   }
   // Remap everything when the ILO list changes.
   const chunks = await byModule('chunks', moduleId);
-  for (const c of chunks) if (c.mappedBy !== 'none') await d.put('chunks', { ...c, mappedBy: 'none' });
+  for (const c of chunks) if (c.mappedBy !== 'none') await d.put('chunks', { ...c, mappedBy: 'none', updatedAt: Date.now() });
   notifyChange();
 }
 
 export async function markIlosPending(moduleId: string): Promise<void> {
   const d = await db();
   const mod = (await d.get('modules', moduleId))!;
-  if (mod.iloStatus !== 'confirmed') await d.put('modules', { ...mod, iloStatus: 'pending' });
+  if (mod.iloStatus !== 'confirmed') await d.put('modules', { ...mod, iloStatus: 'pending', updatedAt: Date.now() });
 }
 
 const MAP_BATCH = 25;
@@ -208,7 +209,7 @@ export async function mapModule(moduleId: string, progress: Progress): Promise<{
   const status = await aiStatus();
   const active = (await byModule('chunks', moduleId)).filter((c) => c.status === 'active');
   const todo = active.filter((c) => c.mappedBy === 'none');
-  for (const c of todo.filter((c) => c.text.length < MIN_CHARS)) await d.put('chunks', { ...c, iloIds: [], mappedBy: 'lexical' });
+  for (const c of todo.filter((c) => c.text.length < MIN_CHARS)) await d.put('chunks', { ...c, iloIds: [], mappedBy: 'lexical', updatedAt: Date.now() });
   // When AI is available, also upgrade passages that were matched offline earlier (e.g. uploaded before the key was added).
   const usable = active.filter(
     (c) => c.text.length >= MIN_CHARS && (c.mappedBy === 'none' || (status.ready && c.mappedBy === 'lexical')),
@@ -229,7 +230,7 @@ export async function mapModule(moduleId: string, progress: Progress): Promise<{
         });
         const m = new Map(out.mappings.map((x) => [x.chunk_id, x.ilo_ids.filter((id) => validIds.has(id))]));
         for (const c of batch) {
-          await d.put('chunks', { ...c, iloIds: m.get(c.id) ?? [], mappedBy: 'ai' });
+          await d.put('chunks', { ...c, iloIds: m.get(c.id) ?? [], mappedBy: 'ai', updatedAt: Date.now() });
           mapped++;
         }
       } catch (e) {
@@ -246,7 +247,7 @@ export async function mapModule(moduleId: string, progress: Progress): Promise<{
     const rest = (await byModule('chunks', moduleId)).filter((c) => c.status === 'active' && c.mappedBy === 'none');
     const m = lexicalMap(ilos, rest);
     for (const c of rest) {
-      await d.put('chunks', { ...c, iloIds: m.get(c.id) ?? [], mappedBy: 'lexical' });
+      await d.put('chunks', { ...c, iloIds: m.get(c.id) ?? [], mappedBy: 'lexical', updatedAt: Date.now() });
       mapped++;
     }
   }

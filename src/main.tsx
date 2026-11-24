@@ -12,8 +12,10 @@ import { ModulePage } from './ui/ModulePage';
 import { topUpPool } from './engine/generate';
 import { mapModule } from './ingest/pipeline';
 import { applyTheme } from './settings';
+import { startAutoSync } from './sync/sync';
 
 applyTheme();
+startAutoSync();
 
 // Installed apps keep a cached copy. Check for a new version when the app is opened, every time it comes back
 // to the foreground, and every 30 minutes; with autoUpdate the page reloads itself once the new version is ready.

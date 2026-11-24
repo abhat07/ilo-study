@@ -103,7 +103,7 @@ export async function ensureModules(): Promise<Module[]> {
   if (existing.length === 0) {
     const t = Date.now();
     for (const [i, m] of DEFAULT_MODULES.entries()) {
-      await d.put('modules', { ...m, createdAt: t + i, iloStatus: 'none' });
+      await d.put('modules', { ...m, createdAt: t + i, updatedAt: t + i, iloStatus: 'none' });
     }
     queueMicrotask(notifyChange);
     return d.getAll('modules');
@@ -119,4 +119,9 @@ export function onDataChange(fn: () => void): () => void {
 }
 export function notifyChange(): void {
   for (const fn of listeners) fn();
+}
+
+/** Tests only: forget the open connection so a fresh IndexedDB (another "device") can be used. */
+export function __resetDbForTests(): void {
+  dbp = null;
 }
