@@ -57,6 +57,16 @@ export function Session({ moduleId }: { moduleId: string }) {
   };
   const shownAt = useRef(Date.now());
 
+  // Colour by learning stage (see styles.css and README): calm while retrieving, outcome-coloured feedback, gold reward.
+  useEffect(() => {
+    const stage =
+      phase === 'summary' ? 'reward'
+      : phase === 'feedback' && mark ? (mark.score >= 0.99 ? 'correct' : mark.score >= 0.5 ? 'partial' : 'miss')
+      : 'retrieve';
+    document.body.dataset.stage = stage;
+  }, [phase, mark]);
+  useEffect(() => () => { document.body.dataset.stage = 'home'; }, []);
+
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 5000);
     return () => clearInterval(t);
@@ -197,7 +207,7 @@ export function Session({ moduleId }: { moduleId: string }) {
         )}
 
         {item && phase !== 'loading' && phase !== 'empty' && (
-          <div class="card q-card" key={item.id}>
+          <div class="card q-card paper" key={item.id}>
             <div class="row small">
               <span class="tag">{TYPE_LABEL[item.type]}</span>
               {item.transfer && <span class="tag warn">new scenario</span>}

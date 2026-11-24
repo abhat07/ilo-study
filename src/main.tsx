@@ -13,6 +13,15 @@ import { topUpPool } from './engine/generate';
 import { mapModule } from './ingest/pipeline';
 
 registerSW({ immediate: true });
+
+// Night palette 21:00–06:00: less short-wavelength (blue) light and lower luminance in the evening.
+function setTimeOfDay(): void {
+  const h = new Date().getHours();
+  document.documentElement.dataset.time = h >= 21 || h < 6 ? 'night' : 'day';
+}
+setTimeOfDay();
+setInterval(setTimeOfDay, 5 * 60_000);
+document.body.dataset.stage = 'home';
 // Ask the browser not to evict our data under storage pressure.
 navigator.storage?.persist?.();
 

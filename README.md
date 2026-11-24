@@ -123,6 +123,32 @@ Your answers are never deleted.
 Sessions aim for **15 minutes or 24 questions**, then show a summary: answered, % correct, mastery changes per
 ILO, over- and under-confidence, and the next review due.
 
+### Colour choices and the evidence
+
+The colour scheme changes with the learning stage (`body[data-stage]`) and the time of day (`html[data-time]`).
+The research on colour and learning is uneven, so each choice notes how strong its evidence is.
+
+| Stage | Colour | Why | Evidence |
+|---|---|---|---|
+| Home / starting | Black + warm orange | Pleasant, warm "emotional design" raises intrinsic motivation and retention | Moderate: meta-analyses Brom et al. 2018; Wong & Adesope 2021 (retention g ≈ 0.35 for emotional design overall) |
+| Answering and reading (question, options, slide passage, explanations) | **Paper card: dark text on warm off-white** during the day | Dark-on-light ("positive polarity") gives better reading, proofreading and comprehension than light-on-dark | **Strong**, replicated: Buchner & Baumgartner 2007; Piepenbrock et al. 2013, 2014; Dobres et al. 2016 |
+| While answering | Brand gradient switched off, calm top bar | Less competing salience while retrieving (signalling / cut extraneous load) | Theory-led (Mayer's signalling and coherence principles) |
+| Correct | Green | Conventional meaning, fastest to recognise | Convention |
+| Wrong | **Violet**, not red | Green vs violet stays distinguishable with red–green colour blindness (~8% of men); avoids an alarm colour | Colour-blindness: well established. Red-impairs-performance (Elliot et al. 2007) is **weak**: later meta-analysis and replications found limited evidence (Gnambs 2020; Steele et al. 2018) |
+| Partly right | Amber | Between the two | Convention |
+| "Think it through" | Teal panel | Marks a different mental task (elaborating), signalling | Signalling theory. "Blue boosts creativity" (Mehta & Zhu 2009) **failed direct replication** (Steele 2014), so it is not relied on |
+| Session summary | Gold glow | Reward moment | Design choice |
+| **21:00–06:00** | Paper turns dark-warm, less blue, dimmer | Evening short-wavelength (blue) light suppresses melatonin and delays sleep; sleep is when memories consolidate | **Strong**: Chellappa et al. 2013; Schöllhorn et al. 2023 (melanopic display light) |
+
+All text and background pairs meet WCAG AA contrast (4.5:1 for body text). Buttons use near-black text on orange
+(about 6:1) because white on orange fails.
+
+The biology drawings on the home page (ATP, the electron transport chain and ATP synthase, the TCA cycle, B-DNA,
+CRISPR–Cas9, Michaelis–Menten with a Lineweaver–Burk inset, translation, Gs/cAMP/PKA signalling, the nucleosome,
+IgG1, pUC19, a dihybrid cross, an agarose gel and a PCR profile) are hand-written SVG in `src/ui/Doodles.tsx`.
+They have no image licences, stay sharp at any size, recolour with the theme and work offline. They sit only in
+the page margins and never behind the question card.
+
 ### Game layer (`engine/game.ts`)
 
 XP, levels (Nucleotide → Codon → Gene → … → Biosphere), a 20-question daily goal, 3 daily quests (+30 XP each),
