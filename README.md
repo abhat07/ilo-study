@@ -88,8 +88,9 @@ Written answers are the main cost. A session with 5 of them costs about 10p, and
 
 ## How to use it
 
-1. **Home → Upload material** on a module. Pick slides (PDF/PPTX), transcripts (VTT/SRT/TXT), DOCX notes and the
-   ILO list. You can select several at once.
+1. **Home → Upload material** on a module. Choose **Upload a whole folder** (or drag the folder onto the card on a
+   laptop) to add all of a module's slides (PDF/PPTX), transcripts (VTT/SRT/TXT), DOCX notes and ILO list at once.
+   Files the app cannot read (for example .apkg or .xlsx) are skipped and listed. ILO documents are read first.
 2. **Check ILOs.** The app copies ILOs out of your files: "Learning outcomes" slides, "By the end of this lecture
    you should be able to…" lists, or an ILO document. Edit, reorder, delete or paste ILOs, then confirm. Nothing is
    generated before you confirm.
@@ -121,6 +122,18 @@ Your answers are never deleted.
 
 Sessions aim for **15 minutes or 24 questions**, then show a summary: answered, % correct, mastery changes per
 ILO, over- and under-confidence, and the next review due.
+
+### Game layer (`engine/game.ts`)
+
+XP, levels (Nucleotide → Codon → Gene → … → Biosphere), a 20-question daily goal, 3 daily quests (+30 XP each),
+18 badges, and day streaks. Everything is **derived from your stored answers**, so backups carry it and nothing
+can drift. The rules reward good learning:
+
+* New questions earn more than repeats (10 vs 6, plus up to 10 for correctness). Due reviews still count.
+* **Honest confidence** earns up to 20 XP via the Brier score, a *proper scoring rule*: for any belief you hold,
+  reporting it truthfully maximises your expected XP. A unit test checks this for all four confidence levels.
+* "I don't know" earns 3 XP, because attempting before seeing the answer helps.
+* Applying an idea to a new case (+10), written answers (+5) and "Think it through" prompts (+5) earn extra.
 
 ### Mastery model (`engine/mastery.ts`)
 
@@ -220,7 +233,14 @@ IndexedDB database `ilo-study`, version 1. The stores (see `src/types.ts`):
 
 **Backup file** (Settings → Export): a `.zip` containing `data.json`
 (`{ app: "ilo-study", version: 1, exportedAt, settings: {cap, notice}, stores: {...} }`) and `files/<id>.pdf`.
-Restoring replaces everything on the device. Dates inside FSRS cards become ISO strings in JSON and are converted
+Restoring replaces everything on the device.
+
+What a backup contains: every module, the extracted text of **every** uploaded file (slides, pages, transcript
+passages, OCR text), your confirmed ILOs, all generated questions, your full answer history, spend log, XP and
+badges. Original **PDF** files are included so "Show original slide" still works. Original PPTX, DOCX and
+transcript files are not stored, only their text, so after a restore you can study everything but cannot
+re-download those originals from the app. Backups are manual (export, then restore on the other device), not
+automatic syncing. Dates inside FSRS cards become ISO strings in JSON and are converted
 back on use.
 
 ---

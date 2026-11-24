@@ -24,15 +24,15 @@ function png(size) {
     raw[y * (size * 4 + 1)] = 0;
     for (let x = 0; x < size; x++) {
       const X = x / s, Y = y / s;
-      let [r, g, b] = [0x0f, 0x3d, 0x5c];
+      let [r, g, b] = [0x0b, 0x0b, 0x0c];
       // two arcs (approximate strands) and a centre dot
       const d1 = Math.abs(Math.hypot(X - 256, Y - 400) - 150);
       const d2 = Math.abs(Math.hypot(X - 256, Y - 112) - 150);
       if (Y > 150 && Y < 362 && X > 140 && X < 372) {
-        if (d1 < 17 && Y < 330) [r, g, b] = [0x8f, 0xd0, 0xff];
+        if (d1 < 17 && Y < 330) [r, g, b] = [0xf9, 0x73, 0x16];
         if (d2 < 17 && Y > 182) [r, g, b] = [255, 255, 255];
       }
-      if (Math.hypot(X - 256, Y - 256) < 26) [r, g, b] = [0xff, 0xd6, 0x66];
+      if (Math.hypot(X - 256, Y - 256) < 26) [r, g, b] = [0xfb, 0xbf, 0x24];
       const i = y * (size * 4 + 1) + 1 + x * 4;
       raw[i] = r; raw[i + 1] = g; raw[i + 2] = b; raw[i + 3] = 255;
     }

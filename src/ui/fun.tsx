@@ -9,14 +9,14 @@ export interface Theme {
 }
 
 const THEMES: Record<string, Theme> = {
-  AMB: { accent: '#06b6d4', accent2: '#6366f1', emoji: '🧬' },
-  GEN: { accent: '#a855f7', accent2: '#ec4899', emoji: '🫛' },
-  BIP: { accent: '#f59e0b', accent2: '#ef4444', emoji: '💻' },
+  AMB: { accent: '#f97316', accent2: '#fbbf24', emoji: '🧬' },
+  GEN: { accent: '#ea580c', accent2: '#f43f5e', emoji: '🫛' },
+  BIP: { accent: '#f59e0b', accent2: '#fde047', emoji: '💻' },
 };
 const FALLBACK: Theme[] = [
-  { accent: '#10b981', accent2: '#06b6d4', emoji: '🔬' },
-  { accent: '#f43f5e', accent2: '#f97316', emoji: '🧪' },
-  { accent: '#3b82f6', accent2: '#8b5cf6', emoji: '🦠' },
+  { accent: '#fb923c', accent2: '#fdba74', emoji: '🔬' },
+  { accent: '#dc2626', accent2: '#f97316', emoji: '🧪' },
+  { accent: '#d97706', accent2: '#facc15', emoji: '🦠' },
 ];
 
 export function themeFor(m: Pick<Module, 'short'>): Theme {
@@ -59,7 +59,7 @@ export function MasteryRing({ value, theme, size = 58 }: { value: number; theme:
   );
 }
 
-const COLOURS = ['#5b5bf7', '#a855f7', '#ec4899', '#f97316', '#facc15', '#22c55e', '#06b6d4'];
+const COLOURS = ['#f97316', '#fb923c', '#fbbf24', '#fde047', '#ea580c', '#ffffff', '#fdba74'];
 
 /** A short confetti burst from a point (or the centre-top of the screen). Respects reduced-motion via CSS. */
 export function confetti(x = window.innerWidth / 2, y = window.innerHeight / 3, count = 36): void {
@@ -134,4 +134,21 @@ export function greeting(now = new Date()): string {
 const PRAISE = ['Nailed it', 'Spot on', 'Yes!', 'Exactly right', 'Brilliant', 'Correct'];
 export function praise(seed: number): string {
   return PRAISE[seed % PRAISE.length];
+}
+
+/** Small pop-up message at the top of the screen (level-ups, badges, XP). */
+export function toast(html: string, ms = 2600): void {
+  let host = document.querySelector<HTMLDivElement>('.toasts');
+  if (!host) {
+    host = document.createElement('div');
+    host.className = 'toasts';
+    host.setAttribute('role', 'status');
+    document.body.appendChild(host);
+  }
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = html;
+  host.appendChild(t);
+  setTimeout(() => t.classList.add('out'), ms);
+  setTimeout(() => t.remove(), ms + 400);
 }

@@ -5,7 +5,9 @@ import { isDue } from '../engine/scheduler';
 import { masteryMap } from '../engine/session';
 import { TopBar, go, useAi, useLive } from './common';
 import { settings } from '../settings';
-import { MasteryRing, allSessions, computeStats, greeting, themeFor, themeStyle, type StudyStats } from './fun';
+import { MasteryRing, greeting, themeFor, themeStyle } from './fun';
+import { Doodles } from './Doodles';
+import { QUEST_XP, loadGame, type GameState } from '../engine/game';
 
 interface CardInfo {
   m: Module;
@@ -18,7 +20,7 @@ interface CardInfo {
   pendingIlos: boolean;
 }
 
-async function load(): Promise<{ cards: CardInfo[]; stats: StudyStats }> {
+async function load(): Promise<{ cards: CardInfo[]; stats: GameState }> {
   const mods = await ensureModules();
   const cards: CardInfo[] = [];
   for (const m of mods.sort((a, b) => a.createdAt - b.createdAt)) {
@@ -36,7 +38,7 @@ async function load(): Promise<{ cards: CardInfo[]; stats: StudyStats }> {
       pendingIlos: m.iloStatus !== 'confirmed',
     });
   }
-  const stats = computeStats(await allSessions(mods.map((m) => m.id)));
+  const stats = await loadGame();
   return { cards, stats };
 }
 
@@ -47,6 +49,8 @@ export function Home() {
   const stats = data?.stats;
   return (
     <>
+      <div class="has-doodles">
+      <Doodles />
       <TopBar title="ILO Study" />
       <div class="wrap">
         <div class="hero">
@@ -58,10 +62,19 @@ export function Home() {
                 ? `Keep your ${stats.streak}-day streak alive: one short session is enough.`
                 : 'Pick a module and press Start. 10–15 minutes is all it takes.'}
           </p>
+          {stats && (
+            <div class="lvl">
+              <div class="badge-lv" title="Level">{stats.level.level}</div>
+              <div class="meta">
+                <div class="top"><span>{stats.level.title}</span><span>{stats.xp - stats.level.floor} / {stats.level.next - stats.level.floor} XP</span></div>
+                <div class="bar"><span style={{ width: `${stats.level.progress * 100}%` }} /></div>
+              </div>
+            </div>
+          )}
           <div class="stats">
             <div class="stat"><b><span class="flame">🔥</span> {stats?.streak ?? 0}</b><span>day streak</span></div>
-            <div class="stat"><b>{stats?.answeredToday ?? 0}</b><span>answered today</span></div>
-            <div class="stat"><b>{stats?.answeredWeek ?? 0}</b><span>this week</span></div>
+            <div class="stat"><b>{stats?.goal.done ?? 0}<small style={{ fontSize: '0.8rem', opacity: 0.8 }}>/{stats?.goal.target ?? 20}</small></b><span>daily goal</span></div>
+            <div class="stat"><b>+{stats?.todayXp ?? 0}</b><span>XP today</span></div>
           </div>
         </div>
 
@@ -74,6 +87,9 @@ export function Home() {
         {adding ? <AddModule onDone={() => setAdding(false)} /> : (
           <button class="btn ghost" onClick={() => setAdding(true)}>＋ Add a module</button>
         )}
+        {stats && <Quests g={stats} />}
+        {stats && <BadgeShelf g={stats} />}
+      </div>
       </div>
     </>
   );
@@ -152,6 +168,44 @@ function AddModule({ onDone }: { onDone: () => void }) {
         <button class="btn primary" onClick={save}>Add</button>
         <button class="btn" onClick={onDone}>Cancel</button>
       </div>
+    </div>
+  );
+}
+
+function Quests({ g }: { g: GameState }) {
+  const done = g.quests.filter((q) => q.done).length;
+  return (
+    <div class="card">
+      <div class="row spread"><h2>⚔️ Daily quests</h2><span class="tag">{done}/3 · +{QUEST_XP} XP each</span></div>
+      {g.quests.map((q) => (
+        <div key={q.id} class={'quest' + (q.done ? ' done' : '')}>
+          <span class="qe">{q.done ? '✅' : q.emoji}</span>
+          <div class="qb">
+            <div class="small" style={{ fontWeight: 700 }}>{q.label}</div>
+            <div class="bar"><span style={{ width: `${(q.progress / q.target) * 100}%` }} /></div>
+          </div>
+          <span class="qx">{q.progress}/{q.target}</span>
+        </div>
+      ))}
+      <p class="muted small" style={{ marginBottom: 0 }}>New quests every day.</p>
+    </div>
+  );
+}
+
+function BadgeShelf({ g }: { g: GameState }) {
+  const earned = g.badges.filter((b) => b.earned).length;
+  return (
+    <div class="card">
+      <div class="row spread"><h2>🏅 Badges</h2><span class="tag">{earned}/{g.badges.length}</span></div>
+      <div class="badges">
+        {g.badges.map((b) => (
+          <div key={b.id} class={'bdg ' + (b.earned ? 'earned' : 'locked')} title={b.desc}>
+            <div class="be">{b.earned ? b.emoji : '🔒'}</div>
+            <div class="bn">{b.name}</div>
+          </div>
+        ))}
+      </div>
+      <p class="muted small" style={{ marginBottom: 0 }}>Hover or long-press a badge to see how to earn it.</p>
     </div>
   );
 }

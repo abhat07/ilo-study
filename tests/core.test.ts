@@ -222,3 +222,47 @@ describe('pricing', () => {
     expect(costGBP('mystery', { input_tokens: 1e6, output_tokens: 0 })).toBeGreaterThanOrEqual(8);
   });
 });
+
+import { computeGame, levelFor as gameLevel, xpForAttempt } from '../src/engine/game';
+import { CONF_PROB } from '../src/engine/mastery';
+
+describe('game layer', () => {
+  it('rewards honest confidence: expected calibration XP peaks at your true belief', () => {
+    // If you truly believe you're right with probability q, which reported confidence maximises expected XP?
+    for (const [q, honest] of [[0.25, 1], [0.5, 2], [0.75, 3], [0.95, 4]] as const) {
+      const expected = (c: 1 | 2 | 3 | 4) => {
+        const right = xpForAttempt(att({ confidence: c, score: 1, response: 'r' })).parts.find((p) => p.label === 'Honest confidence')!.xp;
+        const wrong = xpForAttempt(att({ confidence: c, score: 0, response: 'r' })).parts.find((p) => p.label === 'Honest confidence')!.xp;
+        return q * right + (1 - q) * wrong;
+      };
+      const best = ([1, 2, 3, 4] as const).reduce((b, c) => (expected(c) > expected(b) ? c : b), 1 as 1 | 2 | 3 | 4);
+      expect(best).toBe(honest);
+      expect(CONF_PROB[best]).toBeCloseTo(q, 1);
+    }
+  });
+  it('gives more XP for new questions than repeats', () => {
+    expect(xpForAttempt(att({ firstExposure: true })).total).toBeGreaterThan(xpForAttempt(att({ firstExposure: false })).total);
+  });
+  it('still rewards trying first ("I don\'t know")', () => {
+    expect(xpForAttempt(att({ response: '', score: 0 })).total).toBeGreaterThan(0);
+  });
+  it('has rising level thresholds', () => {
+    expect(gameLevel(0).level).toBe(1);
+    expect(gameLevel(99).level).toBe(1);
+    expect(gameLevel(100).level).toBe(2);
+    expect(gameLevel(300).level).toBe(3);
+    expect(gameLevel(300).title).toBe('Gene');
+  });
+  it('derives streak, quests and badges from history', () => {
+    const now = new Date('2026-11-24T12:00:00').getTime();
+    const day = 86400000;
+    const sessions = [0, 1, 2].map((d) => ({ id: 's' + d, moduleId: 'M', startedAt: now - d * day, endedAt: now - d * day + 600000, attemptIds: ['x'], masteryBefore: {} }));
+    const attempts = Array.from({ length: 6 }, (_, i) => att({ at: now - 1000 * (10 - i), sessionId: 's0', response: 'r', itemId: 'i' + i }));
+    const g = computeGame(attempts, sessions, now);
+    expect(g.streak).toBe(3);
+    expect(g.quests).toHaveLength(3);
+    expect(g.badges.find((b) => b.id === 'run5')!.earned).toBe(true);
+    expect(g.badges.find((b) => b.id === 'streak3')!.earned).toBe(true);
+    expect(g.xp).toBeGreaterThan(0);
+  });
+});

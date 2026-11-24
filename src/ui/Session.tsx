@@ -12,7 +12,8 @@ import {
 import { Bar, Spinner, TopBar, go } from './common';
 import { ClozeInput, McqInput, OrderInput, ShortInput, initialOrder, seededOrder } from './answers';
 import { SourceView } from './SourceView';
-import { confetti, praise } from './fun';
+import { confetti, praise, toast } from './fun';
+import { achievements, loadGame, xpForAttempt, type GameState } from '../engine/game';
 
 type Phase = 'loading' | 'answer' | 'marking' | 'selfmark' | 'feedback' | 'empty' | 'summary';
 
@@ -41,6 +42,19 @@ export function Session({ moduleId }: { moduleId: string }) {
   const [emptyMsg, setEmptyMsg] = useState('');
   const [now, setNow] = useState(Date.now());
   const [combo, setCombo] = useState(0);
+  const gameRef = useRef<GameState | null>(null);
+  const startXp = useRef(0);
+  const [sessionXp, setSessionXp] = useState(0);
+  const celebrate = async () => {
+    const before = gameRef.current;
+    const after = await loadGame();
+    gameRef.current = after;
+    setSessionXp(after.xp - startXp.current);
+    if (!before) return;
+    const msgs = achievements(before, after);
+    msgs.forEach((m, i) => setTimeout(() => toast(m), i * 700));
+    if (msgs.length) confetti(window.innerWidth / 2, 120, 90);
+  };
   const shownAt = useRef(Date.now());
 
   useEffect(() => {
@@ -67,6 +81,8 @@ export function Session({ moduleId }: { moduleId: string }) {
       const mod = await (await db()).get('modules', moduleId);
       if (!mod || mod.iloStatus !== 'confirmed') return go(`/m/${moduleId}/ilos`);
       setIlos(new Map((await byModule('ilos', moduleId)).map((i) => [i.id, i])));
+      gameRef.current = await loadGame();
+      startXp.current = gameRef.current.xp;
       const ctx = await startSession(moduleId);
       ctxRef.current = ctx;
       let it = await nextItem(ctx);
@@ -109,6 +125,7 @@ export function Session({ moduleId }: { moduleId: string }) {
       setCombo(nextCombo);
       confetti(window.innerWidth / 2, 180, nextCombo >= 3 ? 70 : 34);
     } else setCombo(0);
+    celebrate();
     const unseen = (await byModule('items', moduleId)).filter((i) => i.status === 'active' && i.seenCount === 0).length;
     if (unseen < 6) topUpPool(moduleId);
   };
@@ -140,6 +157,7 @@ export function Session({ moduleId }: { moduleId: string }) {
     const it = await nextItem(ctx);
     if (it) return show(it);
     setSummary(await endSession(ctx));
+    await celebrate();
     setPhase('summary');
   };
 
@@ -147,13 +165,14 @@ export function Session({ moduleId }: { moduleId: string }) {
     const ctx = ctxRef.current;
     if (!ctx || ctx.record.attemptIds.length === 0) return go('/');
     setSummary(await endSession(ctx));
+    await celebrate();
     setPhase('summary');
   };
 
   const elapsed = ctxRef.current ? now - ctxRef.current.record.startedAt : 0;
   const answered = ctxRef.current?.record.attemptIds.length ?? 0;
 
-  if (phase === 'summary' && summary) return <Summary summary={summary} moduleId={moduleId} />;
+  if (phase === 'summary' && summary) return <Summary summary={summary} moduleId={moduleId} xp={sessionXp} game={gameRef.current} />;
 
   return (
     <>
@@ -162,6 +181,7 @@ export function Session({ moduleId }: { moduleId: string }) {
         <div class="session-top small muted">
           <Bar value={elapsed / SESSION_TARGET_MS} thin />
           {combo >= 2 && <span class="combo" key={combo}>🔥 {combo} in a row</span>}
+          {sessionXp > 0 && <span class="tag">⚡ {sessionXp} XP</span>}
           <span>{answered} done</span>
           <button class="btn sm" onClick={stop}>End</button>
         </div>
@@ -216,7 +236,7 @@ export function Session({ moduleId }: { moduleId: string }) {
             )}
 
             {phase === 'feedback' && mark && attempt && (
-              <Feedback item={item} mark={mark} attempt={attempt} order={order} choice={choice} ctx={ctxRef.current!} onNext={next} />
+              <Feedback item={item} mark={mark} attempt={attempt} order={order} choice={choice} ctx={ctxRef.current!} onNext={next} onXp={celebrate} />
             )}
           </div>
         )}
@@ -254,9 +274,10 @@ function verdict(score: number, seed: number) {
   return { cls: 'bad', txt: score > 0 ? `Not quite (${Math.round(score * 100)}%)` : 'Not this time', emoji: '🧩' };
 }
 
-function Feedback(props: { item: Item; mark: MarkDetail; attempt: Attempt; order: string[]; choice: number | null; ctx: SessionCtx; onNext: () => void }) {
+function Feedback(props: { item: Item; mark: MarkDetail; attempt: Attempt; order: string[]; choice: number | null; ctx: SessionCtx; onNext: () => void; onXp: () => void }) {
   const { item, mark, attempt } = props;
   const v = verdict(mark.score, attempt.at);
+  const xp = xpForAttempt(attempt);
   const [disputing, setDisputing] = useState(false);
   const [reason, setReason] = useState('');
   const [disputed, setDisputed] = useState(false);
@@ -285,7 +306,8 @@ function Feedback(props: { item: Item; mark: MarkDetail; attempt: Attempt; order
 
   return (
     <div class="stack">
-      <div class={'verdict ' + v.cls}><span class="big-emoji">{v.emoji}</span>{v.txt}</div>
+      <div class={'verdict ' + v.cls}><span class="big-emoji">{v.emoji}</span>{v.txt}<span class="xp-chip">+{xp.total} XP</span></div>
+      <div class="xp-parts">{xp.parts.map((p) => `${p.label} +${p.xp}`).join(' · ')}</div>
 
       {attempt.confidence >= 3 && mark.score < 0.5 && (
         <div class="small notice">You said “{CONF_LABEL[attempt.confidence]}” but this was wrong. Confident errors are the most useful ones to fix — this will come back soon.</div>
@@ -367,7 +389,7 @@ function Feedback(props: { item: Item; mark: MarkDetail; attempt: Attempt; order
               <div class="small" style={{ marginTop: 6 }}>How close were you?</div>
               <div class="row">
                 {[['Missed it', 0], ['Partly', 0.5], ['Got it', 1]].map(([l, s]) => (
-                  <button key={l as string} class="btn sm" onClick={async () => { await recordElaboration(props.ctx, item, elab, s as number); setElabDone(true); }}>{l}</button>
+                  <button key={l as string} class="btn sm" onClick={async () => { await recordElaboration(props.ctx, item, elab, s as number); setElabDone(true); if (elab.trim()) toast('💭 Thought it through <b>+5 XP</b>', 1600); props.onXp(); }}>{l}</button>
                 ))}
               </div>
             </>
@@ -394,7 +416,7 @@ function Feedback(props: { item: Item; mark: MarkDetail; attempt: Attempt; order
   );
 }
 
-function Summary({ summary, moduleId }: { summary: SessionSummary; moduleId: string }) {
+function Summary({ summary, moduleId, xp, game }: { summary: SessionSummary; moduleId: string; xp: number; game: GameState | null }) {
   const pct = summary.answered ? Math.round((summary.correct / summary.answered) * 100) : 0;
   useEffect(() => {
     if (summary.answered > 0) {
@@ -411,6 +433,12 @@ function Summary({ summary, moduleId }: { summary: SessionSummary; moduleId: str
         <div class="card">
           <div class="trophy" aria-hidden="true">{pct >= 80 ? '🏆' : pct >= 50 ? '🌟' : '💪'}</div>
           <h2 class="center">{headline}</h2>
+          {game && (
+            <div class="center" style={{ marginTop: 6 }}>
+              <span class="xp-chip" style={{ marginLeft: 0 }}>+{xp} XP</span>
+              <div class="small muted" style={{ marginTop: 6 }}>Level {game.level.level} · {game.level.title} · {game.level.next - game.xp} XP to next level · 🔥 {game.streak}-day streak</div>
+            </div>
+          )}
           <div class="grid3" style={{ margin: '14px 0' }}>
             <div class="stat-tile"><div class="big-num">{summary.answered}</div><div class="small muted">answered</div></div>
             <div class="stat-tile"><div class="big-num">{pct}%</div><div class="small muted">correct</div></div>
