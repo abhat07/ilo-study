@@ -39,12 +39,17 @@ Open http://localhost:5173.
 
 Production build: `npm run build` creates static files in `dist/`. `npm run preview` serves that build locally.
 
-### On your phone
+### Live app (any device)
 
-Offline use and "Add to Home Screen" need the app served over **HTTPS**, because browsers only allow service
-workers on HTTPS or localhost. The app is plain static files with no server, so any static host works: GitHub
-Pages, Netlify, Cloudflare Pages, and so on. Upload `dist/` to one of them, open the URL on your phone, and choose
-"Add to Home Screen". Your data stays in that phone's browser. Hosting the files does not upload any of your data.
+**https://abhat07.github.io/ilo-study/**
+
+Hosted on GitHub Pages. Every push to `main` runs the tests, builds, and redeploys
+(`.github/workflows/deploy.yml`). On a phone, open the link and choose **Add to Home Screen** (iPhone: Share →
+Add to Home Screen; Android Chrome: ⋮ → Install app). After the first visit it opens offline.
+
+Only the app's code is hosted. Each device and browser keeps its **own** data: your key, ILOs, questions and
+progress. To move them, use Settings → **Export backup** on one device and **Restore** on the other. The key
+is never in the backup, so enter it again on each device.
 
 To try it on a phone over home Wi-Fi without hosting, run `npm run dev -- --host` and open the printed
 network address. Everything works except offline mode.
