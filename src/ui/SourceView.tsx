@@ -4,6 +4,7 @@ import type { Item } from '../types';
 import { renderStoredPdfPage } from '../ingest/extract';
 import { ensureBlob, syncSettings } from '../sync/sync';
 import { Spinner, useLive, where } from './common';
+import { SlidePictures } from './SlidePics';
 
 /** Highlight the quoted evidence inside the passage text. */
 export function Highlighted({ text, quote }: { text: string; quote: string }) {
@@ -60,6 +61,7 @@ export function SourceView({ item }: { item: Item }) {
           )}
           {imgBusy && <Spinner />}
           {img && <img class="slide-img" src={img} alt={`Original ${where(item.source.fileName, loc)}`} />}
+          {loc.kind === 'slide' && <SlidePictures chunkId={chunk.id} alt={where(item.source.fileName, loc)} />}
         </div>
       )}
     </div>

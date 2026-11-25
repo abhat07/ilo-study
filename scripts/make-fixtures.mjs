@@ -92,3 +92,58 @@ v2.push(['Controls', 'A no-template control contains every reagent except the DN
 mkdirSync(new URL('v2/', out), { recursive: true });
 writeFileSync(new URL('v2/AMB_L3_PCR.pdf', out), pdf(v2), 'latin1');
 console.log('v2 fixture written');
+
+// ---------- PPTX with pictures (tests slide pictures; the logo repeats on every slide and should be skipped) ----------
+import { deflateSync } from 'node:zlib';
+function png(w, h, px) {
+  const crcT = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (b) => { let c = 0xffffffff; for (const x of b) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]); };
+  const raw = Buffer.alloc((w * 3 + 1) * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const [r, g, b] = px(x, y); const o = y * (w * 3 + 1) + 1 + x * 3; raw[o] = r; raw[o + 1] = g; raw[o + 2] = b; }
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+let seed = 7;
+const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+// an agarose gel: dark lanes with bright bands, some noise so it is a realistic size
+const lanes = [[60, 120, 200, 260, 300], [90, 160, 240], [60, 120, 200, 260, 300], [140, 220]];
+const gel = png(640, 420, (x, y) => {
+  const lane = Math.floor((x - 40) / 150), inLane = x > 40 && (x - 40) % 150 < 110 && lane < 4;
+  let v = 25 + rnd() * 18;
+  if (y < 30 && inLane) v = 90;
+  if (inLane) for (const b of lanes[lane]) { const d = Math.abs(y - (b + 40)); if (d < 7) v = Math.max(v, 235 - d * 18 + rnd() * 10); }
+  return [v * 0.55, v, v * 0.6];
+});
+const plasmid = png(560, 420, (x, y) => {
+  const d = Math.hypot(x - 280, y - 210);
+  const ring = Math.abs(d - 150) < 14, ang = Math.atan2(y - 210, x - 280);
+  const ori = ring && ang > 0.2 && ang < 0.9, amp = ring && ang < -1.2 && ang > -2.4;
+  const n = rnd() * 14;
+  return ori ? [230, 140 + n, 40] : amp ? [60 + n, 120, 220] : ring ? [90 + n, 90 + n, 100 + n] : [250 - n * 0.3, 250 - n * 0.3, 248];
+});
+const logo = png(220, 90, (x, y) => (x < 70 ? [0, 62 + (y % 9), 116] : [250 - (x % 13), 250 - (y % 11), 250 - ((x * y) % 7)]));
+const icon = png(24, 24, () => [200, 50, 50]);
+const pslides = [
+  { title: 'Lecture 5: Agarose gel electrophoresis', body: ['Intended learning outcomes', 'Explain how agarose gel electrophoresis separates DNA fragments by size', 'Interpret a gel using a DNA ladder'], pics: ['logo'] },
+  { title: 'Running a gel', body: ['DNA is negatively charged because of its phosphate backbone, so it migrates towards the positive anode.', 'Smaller fragments move faster through the agarose matrix, so they travel further.'], pics: ['gel', 'logo', 'icon'] },
+  { title: 'Reading a plasmid map', body: ['A plasmid map shows the origin of replication and the selectable marker such as the ampicillin resistance gene.', 'Supercoiled plasmid DNA runs faster than linear DNA of the same length.'], pics: ['plasmid', 'logo'] },
+  { title: 'Summary', body: ['Fragment size is estimated by comparing band positions to a DNA ladder of known sizes.'], pics: ['logo'] },
+];
+const media = { gel, plasmid, logo, icon };
+const z2 = new JSZip();
+const pr = [], si = [];
+for (const [name, buf] of Object.entries(media)) z2.file(`ppt/media/${name}.png`, buf);
+pslides.forEach((s, i) => {
+  const n = i + 1;
+  z2.file(`ppt/slides/slide${n}.xml`, `<?xml version="1.0"?><p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:sp><p:txBody>${para(s.title)}</p:txBody></p:sp><p:sp><p:txBody>${s.body.map(para).join('')}</p:txBody></p:sp></p:spTree></p:cSld></p:sld>`);
+  const rels = s.pics.map((p, k) => `<Relationship Id="rId${k + 3}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${p}.png"/>`);
+  z2.file(`ppt/slides/_rels/slide${n}.xml.rels`, `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels.join('')}</Relationships>`);
+  pr.push(`<Relationship Id="rId${n + 10}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${n}.xml"/>`);
+  si.push(`<p:sldId id="${255 + n}" r:id="rId${n + 10}"/>`);
+});
+z2.file('ppt/presentation.xml', `<?xml version="1.0"?><p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldIdLst>${si.join('')}</p:sldIdLst></p:presentation>`);
+z2.file('ppt/_rels/presentation.xml.rels', `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${pr.join('')}</Relationships>`);
+z2.file('[Content_Types].xml', ct[0] + '<Default Extension="png" ContentType="image/png"/></Types>');
+writeFileSync(new URL('AMB_L5_Gels.pptx', out), await z2.generateAsync({ type: 'nodebuffer' }));
+console.log('sizes', Object.fromEntries(Object.entries(media).map(([k, v]) => [k, v.length])));

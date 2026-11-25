@@ -243,3 +243,20 @@ export interface LearnSection {
   seenAt?: number;
   updatedAt: number;
 }
+
+/** A picture from a PowerPoint slide, shrunk for display. Blob is local; other devices fetch it on demand. */
+export interface SlideImage {
+  id: string;
+  moduleId: string;
+  fileId: string;
+  chunkId: string;
+  slide: number;
+  hash: string; // sha-256 of the shrunk JPEG: also its name in the sync repo (img/<hash>.jpg)
+  w: number;
+  h: number;
+  status: 'active' | 'removed';
+  uploaded?: boolean; // in the sync repo
+  pruned?: boolean; // deleted from the sync repo after removal
+  updatedAt: number;
+  blob?: Blob;
+}

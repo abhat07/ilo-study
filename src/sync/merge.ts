@@ -12,11 +12,13 @@
  *    schedule and seen-count are rebuilt from the merged answers when neither side has them all;
  *    duplicate questions generated on two devices for the same passage are retired if unanswered
  *  - kv: only cached explanations are synced
+ *  - images (slide pictures, metadata only): union; removed wins; uploaded/pruned flags are kept once set
  */
-import type { Attempt, Chunk, Dispute, GenLog, Ilo, IngestEvent, Item, LearnSection, Lecture, Module, SessionRecord, SourceFile, SpendRecord } from '../types';
+import type { Attempt, Chunk, Dispute, GenLog, Ilo, IngestEvent, Item, LearnSection, Lecture, Module, SessionRecord, SlideImage, SourceFile, SpendRecord } from '../types';
 import { replayCard } from '../engine/scheduler';
 
 export type SyncFile = Omit<SourceFile, 'blob'>;
+export type SyncImage = Omit<SlideImage, 'blob'>;
 
 export interface Snapshot {
   app: 'ilo-study';
@@ -37,13 +39,14 @@ export interface Snapshot {
     kv: { key: string; value: unknown }[];
     lectures: Lecture[];
     sections: LearnSection[];
+    images: SyncImage[];
   };
 }
 
 export function emptySnapshot(): Snapshot {
   return {
     app: 'ilo-study', v: 1, at: 0,
-    stores: { modules: [], files: [], chunks: [], ilos: [], items: [], attempts: [], disputes: [], sessions: [], spend: [], genlog: [], events: [], kv: [], lectures: [], sections: [] },
+    stores: { modules: [], files: [], chunks: [], ilos: [], items: [], attempts: [], disputes: [], sessions: [], spend: [], genlog: [], events: [], kv: [], lectures: [], sections: [], images: [] },
   };
 }
 
@@ -141,6 +144,12 @@ export function mergeSnapshots(a: Snapshot, b: Snapshot): Snapshot {
     stores: {
       modules, files, chunks, ilos, items, attempts, disputes, sessions, spend, genlog, events, kv,
       lectures: unionBy(A.lectures, B.lectures, (l) => l.id, (x, y) => (y.updatedAt > x.updatedAt ? y : x)),
+      images: unionBy(A.images, B.images, (i) => i.id, (x, y) => ({
+        ...(y.updatedAt > x.updatedAt ? y : x),
+        status: x.status === 'removed' || y.status === 'removed' ? 'removed' : 'active',
+        uploaded: !!(x.uploaded || y.uploaded) || undefined,
+        pruned: !!(x.pruned || y.pruned) || undefined,
+      })),
       sections: unionBy(A.sections, B.sections, (s) => s.id, (x, y) => (y.updatedAt > x.updatedAt || (!!y.seenAt && !x.seenAt) ? { ...y, seenAt: y.seenAt ?? x.seenAt } : { ...x, seenAt: x.seenAt ?? y.seenAt })),
     },
   };

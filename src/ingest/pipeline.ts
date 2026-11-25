@@ -6,6 +6,7 @@ import { extract, fileKind, type Progress } from './extract';
 import { detectIlos, looksLikeIloDoc, type IloCandidate } from './ilo';
 import { lexicalMap } from './lexical';
 import { locatorKey, normalise } from './text';
+import { imageCountForFile, removeImagesForFile, saveSlideImages } from './slideImages';
 
 export interface IngestResult {
   fileName: string;
@@ -43,7 +44,13 @@ async function ingestOne(moduleId: string, f: File, progress: Progress): Promise
   const hash = await sha256(buf);
   const d = await db();
   const moduleFiles = await byModule('files', moduleId);
-  if (moduleFiles.some((x) => x.hash === hash && x.status === 'active')) {
+  const same = moduleFiles.find((x) => x.hash === hash && x.status === 'active');
+  if (same) {
+    // A PowerPoint uploaded before slide pictures existed: add just its pictures.
+    if (kind === 'pptx' && (await imageCountForFile(same.id)) === 0) {
+      const n = await saveSlideImages(moduleId, same.id, buf, progress);
+      if (n) return { result: { fileName: f.name, outcome: 'updated', detail: `slide pictures added (${n})` }, ilos: [] };
+    }
     return { result: { fileName: f.name, outcome: 'duplicate', detail: 'Already uploaded (identical file).' }, ilos: [] };
   }
 
@@ -105,6 +112,7 @@ async function ingestOne(moduleId: string, f: File, progress: Progress): Promise
       flagged.push({ chunkId: c.id, reason: `Passage no longer in latest upload of ${f.name}` });
     }
     await d.put('files', { ...prev, status: 'superseded', blob: undefined });
+    await removeImagesForFile(prev.id);
     summary = `new version: ${added} new, ${changed} changed, ${unmatched.size} removed, ${moved} moved, ${same} unchanged`;
   }
 
@@ -128,7 +136,15 @@ async function ingestOne(moduleId: string, f: File, progress: Progress): Promise
   // Flag (never delete) items whose source changed; their attempts stay in history.
   if (flagged.length) await flagItemsForChunks(moduleId, flagged);
 
-  const ocrNote = file.ocrCount ? `, OCR on ${file.ocrCount}` : '';
+  let pics = 0;
+  if (kind === 'pptx') {
+    try {
+      pics = await saveSlideImages(moduleId, fileId, buf, progress);
+    } catch (e) {
+      console.warn('slide pictures skipped', e); // text is what matters; pictures are a bonus
+    }
+  }
+  const ocrNote = (file.ocrCount ? `, OCR on ${file.ocrCount}` : '') + (pics ? `, ${pics} slide pictures` : '');
   return {
     result: { fileName: f.name, outcome: prev ? 'updated' : 'added', detail: summary + ocrNote },
     ilos,
@@ -212,6 +228,7 @@ export async function removeFile(fileId: string): Promise<{ passages: number; qu
   for (const it of items) await tx.objectStore('items').put({ ...it, status: 'retired', flagReason: `File removed: ${file.name}` });
   await tx.objectStore('events').put({ id: uid('ev_'), moduleId: file.moduleId, at: now, fileName: file.name, summary: `removed: ${chunks.length} passages and ${items.length} questions retired` });
   await tx.done;
+  await removeImagesForFile(fileId);
   notifyChange();
   return { passages: chunks.length, questions: items.length };
 }
@@ -309,6 +326,7 @@ export async function scrubRemovedFiles(): Promise<number> {
       n++;
     }
   }
+  for (const id of removed) await removeImagesForFile(id);
   if (n) notifyChange();
   return n;
 }

@@ -18,6 +18,7 @@ import { achievements, loadGame, type GameState } from '../engine/game';
 import { Spinner, TopBar, go, useLive } from './common';
 import { QuestionCard } from './QuestionCard';
 import { Ring, Visual } from './Visual';
+import { useSlidePics } from './SlidePics';
 import { Doodles } from './Doodles';
 import { confetti, toast } from './fun';
 
@@ -333,24 +334,35 @@ function ExplainCard({ section, ilo, count, onDone, reread }: { section: LearnSe
 function SlideStrip({ section }: { section: LearnSection }) {
   const refs = useLive(async () => {
     const d = await db();
-    const chunks = (await Promise.all(section.chunkIds.slice(0, 4).map((id) => d.get('chunks', id)))).filter((c) => !!c);
-    const files = await Promise.all(chunks.map((c) => d.get('files', c!.fileId)));
-    return chunks.map((c, i) => ({ c: c!, f: files[i] }));
+    const chunks = (await Promise.all(section.chunkIds.map((id) => d.get('chunks', id)))).filter((c) => !!c);
+    // slides with pictures first: they are what the explanation can't draw
+    const withPics = await Promise.all(chunks.map(async (c) => (await d.getAllFromIndex('images', 'byChunk', c!.id)).some((i) => i.status === 'active')));
+    const ranked = chunks.map((c, i) => ({ c: c!, pics: withPics[i] })).sort((a, b) => Number(b.pics) - Number(a.pics)).slice(0, 4);
+    const files = await Promise.all(ranked.map((r) => d.get('files', r.c.fileId)));
+    return ranked.map((r, i) => ({ c: r.c, f: files[i], pics: r.pics }));
   }, [section.id]);
   if (!refs?.length) return null;
   return (
     <details class="slides" open>
       <summary>From the slides ({refs.length})</summary>
       <div class="slide-row">
-        {refs.map(({ c, f }) => <SlideThumb key={c.id} chunkText={c.text} where={`${c.fileName.replace(/\.[^.]+$/, '')} · ${locatorLabel(c.locator)}`} pdf={f && f.kind === 'pdf' && c.locator.kind === 'page' ? { file: f, page: c.locator.page } : undefined} />)}
+        {refs.map(({ c, f, pics }) => (
+          <SlideThumb
+            key={c.id}
+            chunkId={pics ? c.id : undefined}
+            chunkText={c.text}
+            where={`${c.fileName.replace(/\.[^.]+$/, '')} · ${locatorLabel(c.locator)}`}
+            pdf={f && f.kind === 'pdf' && c.locator.kind === 'page' ? { file: f, page: c.locator.page } : undefined}
+          />
+        ))}
       </div>
     </details>
   );
 }
-
-function SlideThumb({ chunkText, where, pdf }: { chunkText: string; where: string; pdf?: { file: import('../types').SourceFile; page: number } }) {
+function SlideThumb({ chunkId, chunkText, where, pdf }: { chunkId?: string; chunkText: string; where: string; pdf?: { file: import('../types').SourceFile; page: number } }) {
   const [img, setImg] = useState<string | null>(null);
   const [big, setBig] = useState(false);
+  const { pics } = useSlidePics(chunkId);
   useEffect(() => {
     if (!pdf) return;
     let alive = true;
@@ -362,9 +374,22 @@ function SlideThumb({ chunkText, where, pdf }: { chunkText: string; where: strin
     })();
     return () => { alive = false; };
   }, [pdf?.file.id, pdf?.page]);
+  const text = <div class="slide-text">{big ? chunkText : chunkText.slice(0, 260) + (chunkText.length > 260 ? '…' : '')}</div>;
   return (
     <figure class={'slide-thumb' + (big ? ' big' : '')} onClick={() => setBig(!big)}>
-      {img ? <img src={img} alt={where} /> : <div class="slide-text">{chunkText.slice(0, 260)}{chunkText.length > 260 ? '…' : ''}</div>}
+      {img ? (
+        <img src={img} alt={where} />
+      ) : pics.length ? (
+        <>
+          <div class={'pic-grid n' + Math.min(big ? pics.length : 1, 3)}>
+            {(big ? pics : pics.slice(0, 1)).map((p) => <img key={p.id} src={p.url} width={p.w} height={p.h} alt={where} />)}
+            {!big && pics.length > 1 && <span class="pic-count">+{pics.length - 1}</span>}
+          </div>
+          {big && text}
+        </>
+      ) : (
+        text
+      )}
       <figcaption>{where}</figcaption>
     </figure>
   );

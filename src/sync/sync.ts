@@ -3,13 +3,14 @@
  *
  *   sync/data.json.gz   everything except original PDFs (gzip-compressed JSON snapshot)
  *   blobs/<sha256>.pdf  original PDFs, uploaded once, downloaded to other devices only when you open a slide
+ *   img/<sha256>.jpg    slide pictures from PowerPoints, the same way
  *
  * Each sync: pull → merge with this device (merge.ts) → apply locally (only ever adds or updates,
  * never wipes) → push if the merged copy differs → retry if another device pushed in between.
  * The token lives only in this browser's storage and is never included in backups or the synced copy.
  */
 import { db, notifyChange, onDataChange } from '../db';
-import type { SourceFile } from '../types';
+import type { SlideImage, SourceFile } from '../types';
 import { ConflictError, GitHubRemote, RemoteAuthError, type Remote } from './remote';
 import { canonical, emptySnapshot, mergeSnapshots, type Snapshot } from './merge';
 
@@ -84,14 +85,15 @@ export async function exportSnapshot(): Promise<Snapshot> {
   const d = await db();
   const s = emptySnapshot();
   s.at = Date.now();
-  const [modules, files, chunks, ilos, items, attempts, disputes, sessions, spend, genlog, events, keys, vals, lectures, sections] = await Promise.all([
+  const [modules, files, chunks, ilos, items, attempts, disputes, sessions, spend, genlog, events, keys, vals, lectures, sections, images] = await Promise.all([
     d.getAll('modules'), d.getAll('files'), d.getAll('chunks'), d.getAll('ilos'), d.getAll('items'), d.getAll('attempts'),
     d.getAll('disputes'), d.getAll('sessions'), d.getAll('spend'), d.getAll('genlog'), d.getAll('events'), d.getAllKeys('kv'), d.getAll('kv'),
-    d.getAll('lectures'), d.getAll('sections'),
+    d.getAll('lectures'), d.getAll('sections'), d.getAll('images'),
   ]);
   s.stores = {
     modules, chunks, ilos, items, attempts, disputes, sessions, spend, genlog, events, lectures, sections,
     files: files.map(({ blob, ...rest }) => (void blob, rest)),
+    images: images.map(({ blob, ...rest }) => (void blob, rest)),
     kv: keys.map((k, i) => ({ key: String(k), value: vals[i] })).filter((k) => k.key.startsWith('explain:')),
   };
   return s;
@@ -107,7 +109,7 @@ const FILE_SEV = { active: 0, superseded: 1, removed: 2 } as const;
  */
 export async function applySnapshot(m: Snapshot): Promise<number> {
   const d = await db();
-  const stores = ['modules', 'files', 'chunks', 'ilos', 'items', 'attempts', 'disputes', 'sessions', 'spend', 'genlog', 'events', 'kv', 'lectures', 'sections'] as const;
+  const stores = ['modules', 'files', 'chunks', 'ilos', 'items', 'attempts', 'disputes', 'sessions', 'spend', 'genlog', 'events', 'kv', 'lectures', 'sections', 'images'] as const;
   const tx = d.transaction(stores as unknown as typeof stores[number][], 'readwrite');
   let changed = 0;
   const S = m.stores;
@@ -168,6 +170,17 @@ export async function applySnapshot(m: Snapshot): Promise<number> {
     if (!cur || s.updatedAt > cur.updatedAt) await put('sections', { ...s, seenAt: s.seenAt ?? cur?.seenAt });
     else if (s.seenAt && !cur.seenAt) await put('sections', { ...cur, seenAt: s.seenAt });
   }
+  for (const im of S.images ?? []) {
+    const cur = await tx.objectStore('images').get(im.id);
+    if (!cur) await put('images', im);
+    else {
+      const status = cur.status === 'removed' || im.status === 'removed' ? 'removed' : 'active';
+      const uploaded = !!(cur.uploaded || im.uploaded), pruned = !!(cur.pruned || im.pruned);
+      if (status !== cur.status || uploaded !== !!cur.uploaded || pruned !== !!cur.pruned) {
+        await put('images', { ...cur, status, uploaded: uploaded || undefined, pruned: pruned || undefined, blob: status === 'removed' ? undefined : cur.blob });
+      }
+    }
+  }
   await tx.done;
   if (changed) notifyChange();
   return changed;
@@ -179,6 +192,7 @@ export interface SyncResult {
   pulled: number; // local records added/updated from other devices
   pushed: boolean;
   blobsUp: number;
+  imagesUp: number;
 }
 
 export async function syncOnce(remote: Remote, device = 'device'): Promise<SyncResult> {
@@ -206,7 +220,9 @@ export async function syncOnce(remote: Remote, device = 'device'): Promise<SyncR
     }
     const blobsUp = await pushBlobs(remote, device);
     await pruneBlobs(remote, device);
-    return { pulled, pushed, blobsUp };
+    const imagesUp = await pushImages(remote, device);
+    await pruneImages(remote, device);
+    return { pulled, pushed, blobsUp, imagesUp };
   }
   throw new Error('Could not sync: the synced copy kept changing. Try again in a moment.');
 }
@@ -242,6 +258,58 @@ async function pruneBlobs(remote: Remote, device: string): Promise<void> {
   }
 }
 
+/** Slide pictures per sync: GitHub limits how fast files can be created, so big decks go up over a few syncs. */
+const IMAGES_PER_SYNC = 30;
+
+/** Upload slide pictures not in the synced copy yet. The "uploaded" flag syncs, so only one device sends each. */
+async function pushImages(remote: Remote, device: string): Promise<number> {
+  const d = await db();
+  const todo = (await d.getAll('images')).filter((i) => i.blob && i.status === 'active' && !i.uploaded);
+  const sent = new Set<string>();
+  let n = 0;
+  for (const im of todo) {
+    if (n >= IMAGES_PER_SYNC) break;
+    if (!sent.has(im.hash)) {
+      try {
+        await remote.put(`img/${im.hash}.jpg`, new Uint8Array(await im.blob!.arrayBuffer()), null, `add a slide picture from ${device}`);
+        n++;
+      } catch (e) {
+        if (!(e instanceof ConflictError)) throw e; // already there
+      }
+      sent.add(im.hash);
+    }
+    const cur = await d.get('images', im.id);
+    if (cur) await d.put('images', { ...cur, uploaded: true });
+  }
+  if (n) notifyChange(); // the uploaded flags go up with the next sync
+  return n;
+}
+
+/** Delete pictures of removed files from the synced copy (unless a live picture has identical bytes). */
+async function pruneImages(remote: Remote, device: string): Promise<void> {
+  const d = await db();
+  const all = await d.getAll('images');
+  const live = new Set(all.filter((i) => i.status === 'active').map((i) => i.hash));
+  for (const im of all.filter((i) => i.status === 'removed' && i.uploaded && !i.pruned)) {
+    if (!live.has(im.hash)) await remote.remove(`img/${im.hash}.jpg`, `remove a deleted slide picture from ${device}`);
+    await d.put('images', { ...im, pruned: true });
+  }
+}
+
+/** A slide picture: from this device, or downloaded once from the synced copy. */
+export async function ensureImageBlob(im: SlideImage): Promise<Blob | null> {
+  if (im.blob) return im.blob;
+  const remote = githubRemote();
+  if (!remote || im.status !== 'active' || !im.uploaded) return null;
+  const r = await remote.get(`img/${im.hash}.jpg`);
+  if (!r) return null;
+  const blob = new Blob([r.bytes as BlobPart], { type: 'image/jpeg' });
+  const d = await db();
+  const cur = await d.get('images', im.id);
+  if (cur && cur.status === 'active') await d.put('images', { ...cur, blob });
+  return blob;
+}
+
 /** Original PDF for a file: from this device, or downloaded once from the synced copy. */
 export async function ensureBlob(file: SourceFile): Promise<Blob | null> {
   if (file.blob) return file.blob;
@@ -269,10 +337,12 @@ export function syncNow(reason = 'manual'): Promise<void> {
     emit({ state: 'syncing', last: localStorage.getItem(K.last) ?? undefined, detail: reason });
     try {
       const r = await syncOnce(remote, syncSettings.device());
+      // pictures went up: sync again soon so other devices learn they're there, and send the next batch
+      if (r.imagesUp) setTimeout(() => void syncNow('slide pictures'), 20_000);
       const now = new Date().toISOString();
       localStorage.setItem(K.last, now);
       localStorage.removeItem(K.error);
-      emit({ state: 'idle', last: now, detail: `${r.pulled ? `${r.pulled} updates from other devices` : 'up to date'}${r.pushed ? ', uploaded changes' : ''}${r.blobsUp ? `, ${r.blobsUp} PDF${r.blobsUp > 1 ? 's' : ''}` : ''}` });
+      emit({ state: 'idle', last: now, detail: `${r.pulled ? `${r.pulled} updates from other devices` : 'up to date'}${r.pushed ? ', uploaded changes' : ''}${r.blobsUp ? `, ${r.blobsUp} PDF${r.blobsUp > 1 ? 's' : ''}` : ''}${r.imagesUp ? `, ${r.imagesUp} slide picture${r.imagesUp > 1 ? 's' : ''}` : ''}` });
     } catch (e) {
       const msg = e instanceof RemoteAuthError ? e.message : !navigator.onLine ? 'Offline: will sync when you are back online.' : `Sync failed: ${(e as Error).message}`;
       localStorage.setItem(K.error, msg);

@@ -227,3 +227,46 @@ describe('removing a file', () => {
     expect(targets.map((t) => t.chunk.id)).toContain('L1.pdf|p1');
   });
 });
+
+describe('slide pictures sync', () => {
+  let remote: MemoryRemote;
+  beforeEach(() => {
+    devices.clear();
+    remote = new MemoryRemote();
+  });
+  const pic = (id: string, hash: string) => ({
+    id, moduleId: mod.id, fileId: 'f1', chunkId: 'c1', slide: 1, hash, w: 800, h: 600, status: 'active' as const, updatedAt: T0,
+    blob: new Blob([new Uint8Array([1, 2, 3, hash.length])], { type: 'image/jpeg' }),
+  });
+
+  it('uploads each picture once, other devices get metadata, removal prunes it', async () => {
+    use('mac');
+    let d = await db();
+    await d.put('modules', mod);
+    await d.put('images', pic('f1|s1|0', 'aaa'));
+    await d.put('images', pic('f1|s2|0', 'aaa')); // same bytes on two slides: one upload
+    await d.put('images', pic('f1|s3|0', 'bbb'));
+    const r1 = await syncOnce(remote, 'mac');
+    expect(r1.imagesUp).toBe(2);
+    expect([...remote.files.keys()].filter((k) => k.startsWith('img/')).sort()).toEqual(['img/aaa.jpg', 'img/bbb.jpg']);
+    await syncOnce(remote, 'mac'); // pushes the uploaded flags
+
+    use('phone');
+    const r2 = await syncOnce(remote, 'phone');
+    expect(r2.imagesUp).toBe(0);
+    d = await db();
+    const got = await d.getAll('images');
+    expect(got).toHaveLength(3);
+    expect(got.every((i) => i.uploaded && !i.blob)).toBe(true);
+
+    // the phone removes the file; the mac prunes nothing it shouldn't
+    for (const im of got) await d.put('images', { ...im, status: 'removed', updatedAt: T0 + 5 });
+    await syncOnce(remote, 'phone');
+    expect([...remote.files.keys()].filter((k) => k.startsWith('img/'))).toEqual([]);
+    use('mac');
+    await syncOnce(remote, 'mac');
+    d = await db();
+    const mac = await d.getAll('images');
+    expect(mac.every((i) => i.status === 'removed' && !i.blob)).toBe(true);
+  });
+});

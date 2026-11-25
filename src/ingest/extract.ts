@@ -154,6 +154,32 @@ async function extractPptx(buf: ArrayBuffer, progress: Progress): Promise<RawChu
   return out;
 }
 
+/** Pictures on each slide (PNG/JPEG/GIF/BMP), in presentation order. Slide numbers start at 1. */
+export async function pptxSlideImages(buf: ArrayBuffer): Promise<Map<number, Blob[]>> {
+  const zip = await JSZip.loadAsync(buf);
+  const slides = Object.keys(zip.files)
+    .filter((p) => /^ppt\/slides\/slide\d+\.xml$/.test(p))
+    .sort((a, b) => num(a) - num(b));
+  const order = await slideOrder(zip, slides);
+  const out = new Map<number, Blob[]>();
+  for (let i = 0; i < order.length; i++) {
+    const relsPath = order[i].replace('slides/', 'slides/_rels/') + '.rels';
+    if (!zip.file(relsPath)) continue;
+    const rels = xml(await zip.file(relsPath)!.async('string'));
+    const seen = new Set<string>();
+    for (const r of [...rels.getElementsByTagName('Relationship')]) {
+      const type = r.getAttribute('Type') ?? '';
+      const resolved = 'ppt/' + (r.getAttribute('Target') ?? '').replace(/^\.\.\//, '');
+      if (!type.endsWith('/image') || seen.has(resolved) || !/\.(png|jpe?g|gif|bmp)$/i.test(resolved) || !zip.file(resolved)) continue;
+      seen.add(resolved);
+      const blob = await zip.file(resolved)!.async('blob');
+      if (blob.size < 6000) continue; // bullets, icons
+      out.set(i + 1, [...(out.get(i + 1) ?? []), blob]);
+    }
+  }
+  return out;
+}
+
 async function slideOrder(zip: JSZip, fallback: string[]): Promise<string[]> {
   try {
     const pres = xml(await zip.file('ppt/presentation.xml')!.async('string'));

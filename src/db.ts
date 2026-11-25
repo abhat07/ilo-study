@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type {
-  Attempt, Chunk, Dispute, GenLog, Ilo, IngestEvent, Item, LearnSection, Lecture, Module, SessionRecord, SourceFile, SpendRecord,
+  Attempt, Chunk, Dispute, GenLog, Ilo, IngestEvent, Item, LearnSection, Lecture, Module, SessionRecord, SlideImage, SourceFile, SpendRecord,
 } from './types';
 
 interface StudyDB extends DBSchema {
@@ -17,27 +17,34 @@ interface StudyDB extends DBSchema {
   events: { key: string; value: IngestEvent; indexes: { byModule: string } };
   lectures: { key: string; value: Lecture; indexes: { byModule: string } };
   sections: { key: string; value: LearnSection; indexes: { byModule: string; byLecture: string } };
+  images: { key: string; value: SlideImage; indexes: { byModule: string; byChunk: string; byFile: string } };
   kv: { key: string; value: unknown };
 }
 
 export type StoreName =
   | 'modules' | 'files' | 'chunks' | 'ilos' | 'items' | 'attempts' | 'disputes'
-  | 'sessions' | 'spend' | 'genlog' | 'events' | 'kv' | 'lectures' | 'sections';
+  | 'sessions' | 'spend' | 'genlog' | 'events' | 'kv' | 'lectures' | 'sections' | 'images';
 
 export const ALL_STORES: StoreName[] = [
-  'modules', 'files', 'chunks', 'ilos', 'items', 'attempts', 'disputes', 'sessions', 'spend', 'genlog', 'events', 'kv', 'lectures', 'sections',
+  'modules', 'files', 'chunks', 'ilos', 'items', 'attempts', 'disputes', 'sessions', 'spend', 'genlog', 'events', 'kv', 'lectures', 'sections', 'images',
 ];
 
 let dbp: Promise<IDBPDatabase<StudyDB>> | null = null;
 
 export function db(): Promise<IDBPDatabase<StudyDB>> {
   if (!dbp) {
-    dbp = openDB<StudyDB>('ilo-study', 2, {
+    dbp = openDB<StudyDB>('ilo-study', 3, {
       // another window still has the old version open: reload it so the upgrade can proceed
       blocking() {
         if (typeof location !== 'undefined') location.reload();
       },
       upgrade(d, oldVersion) {
+        if (oldVersion < 3) {
+          const img = d.createObjectStore('images', { keyPath: 'id' });
+          img.createIndex('byModule', 'moduleId');
+          img.createIndex('byChunk', 'chunkId');
+          img.createIndex('byFile', 'fileId');
+        }
         if (oldVersion < 2) {
           const lec = d.createObjectStore('lectures', { keyPath: 'id' });
           lec.createIndex('byModule', 'moduleId');

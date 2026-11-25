@@ -64,6 +64,8 @@ device. The data goes through a **private GitHub repository** (e.g. `abhat07/ilo
 * `sync/data.json.gz`: everything except original PDFs, as one gzip-compressed snapshot.
 * `blobs/<sha256>.pdf`: original PDFs. Each is uploaded once and downloaded on another device only when you
   press "Show original slide".
+* `img/<sha256>.jpg`: slide pictures from PowerPoints, the same way. Up to 30 go up per sync (GitHub limits how
+  fast files can be created), so a big batch of decks takes a few minutes to reach your other devices.
 
 **Setup, once per device:** create a fine-grained token with *Only select repositories → ilo-study-data* and
 *Contents: Read and write*, then paste the repository name and the token into the Sync card. The token is
@@ -156,7 +158,8 @@ Each lecture is a **lesson path** (`src/learn/sections.ts`, `src/ui/Learn.tsx`),
 1. **Explain.** 4–10 short points written only from that lecture's passages for that ILO; admin and anecdotes
    are left out. Each point carries a verbatim quote that is checked on the device; points that fail the check
    are dropped. Points include an **animated visual** (process flow, cycle, comparison table or labelled parts)
-   and **the original slides** (PDF pages rendered; PPTX and transcript passages shown as text).
+   and **the original slides** (PDF pages rendered; PowerPoint slides show their own pictures; transcript
+   passages shown as text). Slides with pictures are shown first. Tap one to enlarge it.
 2. **Test every point.** The model writes 1–2 questions per point. Any point it misses gets a fill-the-gap made
    on the device from its quote, so nothing goes untested. **Link questions** follow: short answers that connect
    this ILO to earlier points in the lecture and the previous lecture, the building blocks of essay answers.
@@ -278,6 +281,7 @@ src/
     mock.ts             DEV-ONLY fake model
   ingest/
     extract.ts          PDF (pdf.js), PPTX/DOCX (JSZip + XML), VTT/SRT/TXT → passages
+    slideImages.ts      PowerPoint slide pictures: logo/template filter, shrink to JPEG, store per slide
     ocr.ts              on-device OCR (tesseract.js) for diagram-heavy pages and slide images
     text.ts             transcript parsing, chunking, normalisation, quote check
     ilo.ts              local ILO detection
@@ -330,12 +334,13 @@ IndexedDB database `ilo-study`, version 1. The stores (see `src/types.ts`):
 | `kv` | string | pending ILO candidates, cached explanations |
 
 **Backup file** (Settings → Export): a `.zip` containing `data.json`
-(`{ app: "ilo-study", version: 1, exportedAt, settings: {cap, notice}, stores: {...} }`) and `files/<id>.pdf`.
+(`{ app: "ilo-study", version: 1, exportedAt, settings: {cap, notice}, stores: {...} }`), `files/<id>.pdf` and
+`images/<sha256>.jpg` (slide pictures).
 Restoring replaces everything on the device.
 
 What a backup contains: every module, the extracted text of **every** uploaded file (slides, pages, transcript
 passages, OCR text), your confirmed ILOs, all generated questions, your full answer history, spend log, XP and
-badges. Original **PDF** files are included so "Show original slide" still works. Original PPTX, DOCX and
+badges. Original **PDF** files and PowerPoint **slide pictures** are included so slides still show. Original PPTX, DOCX and
 transcript files are not stored, only their text, so after a restore you can study everything but cannot
 re-download those originals from the app. Backups are manual (export, then restore on the other device), not
 automatic syncing. Dates inside FSRS cards become ISO strings in JSON and are converted
@@ -387,8 +392,14 @@ questions still served), backup export → restore round-trip, and on-device OCR
 4. **Passage = one slide / one PDF page / ~150 words or 2 minutes of transcript / ~220 words of a DOCX.**
    Passages under 60 characters are not matched to ILOs and passages under 80 are not used for questions.
 5. **OCR** runs on PDF pages with under 200 characters of text and on PNG/JPEG images over 15 KB inside PPTX
-   slides. EMF/WMF vector images in PPTX cannot be OCR'd. Rendering the original slide works for PDFs only. For
-   PPTX, export to PDF if you want slide images.
+   slides. EMF/WMF vector images in PPTX cannot be OCR'd.
+
+   **Slide pictures (PowerPoint).** At upload, each slide's PNG/JPEG/GIF/BMP pictures are saved, shrunk to at
+   most 1100 px wide as JPEG (typically 15–60 KB each). Skipped: pictures under 6 KB or 140×90 px (bullets,
+   icons), and any picture repeated on at least 3 slides and a quarter of the deck (logos, template
+   backgrounds). Text boxes, shapes, SmartArt and EMF/WMF drawings are not pictures, so they appear as the
+   slide's text, not as an image; PDFs render the whole page. Re-uploading a PowerPoint you added before this
+   feature only adds its pictures (no new passages or questions).
 6. **Session length** is fixed at 15 minutes / 24 questions and is not a setting (the brief allows no manual
    settings). It ends early if only not-yet-due repeats are left.
 7. **Mastery thresholds and weights** (above) are reasonable defaults, not fitted to data. FSRS uses default

@@ -673,3 +673,12 @@ body[data-stage='miss'] .doodles.calm .doodle { opacity: 0.48; }
 .mini-rings .pring b { font-size: 0.68rem; }
 .section-done h2 { margin-top: 6px; }
 select { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card-2); color: var(--ink); max-width: 46%; }
+
+/* slide pictures from PowerPoints */
+.pic-grid { position: relative; display: grid; gap: 4px; background: #fff; }
+.pic-grid.n2 { grid-template-columns: 1fr 1fr; }
+.pic-grid.n3 { grid-template-columns: 1fr 1fr 1fr; }
+.pic-grid img { display: block; width: 100%; height: auto; max-height: 220px; object-fit: contain; background: #fff; }
+.slide-thumb.big .pic-grid img { max-height: 70vh; }
+.pic-count { position: absolute; right: 6px; bottom: 6px; font-size: 0.7rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: rgba(0, 0, 0, 0.62); color: #fff; }
+.slide-pics .slide-img { height: auto; }

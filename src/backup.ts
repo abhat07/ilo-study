@@ -1,5 +1,5 @@
 /**
- * Full backup as a .zip: data.json (every store) + files/<id>.pdf (original PDFs).
+ * Full backup as a .zip: data.json (every store) + files/<id>.pdf (original PDFs) + images/<hash>.jpg (slide pictures).
  * The API key is never included.
  */
 import JSZip from 'jszip';
@@ -27,6 +27,13 @@ export async function exportBackup(): Promise<Blob> {
         void blob;
         return { ...rest, hasBlob: !!f.blob };
       });
+    } else if (s === 'images') {
+      stores.images = rows.map((im) => {
+        if (im.blob) zip.file(`images/${im.hash}.jpg`, im.blob);
+        const { blob, ...rest } = im;
+        void blob;
+        return { ...rest, hasBlob: !!im.blob };
+      });
     } else stores[s] = rows;
   }
   zip.file(
@@ -49,6 +56,11 @@ export async function importBackup(file: File): Promise<{ counts: Record<string,
     const b = f.hasBlob ? await zip.file(`files/${f.id}.pdf`)?.async('blob') : undefined;
     if (b) blobs.set(f.id, new Blob([b], { type: 'application/pdf' }));
   }
+  const pics = new Map<string, Blob>();
+  for (const im of (data.stores.images ?? []) as any[]) {
+    const b = im.hasBlob && !pics.has(im.hash) ? await zip.file(`images/${im.hash}.jpg`)?.async('blob') : undefined;
+    if (b) pics.set(im.hash, new Blob([b], { type: 'image/jpeg' }));
+  }
   const d = await db();
   const counts: Record<string, number> = {};
   const tx = d.transaction(ALL_STORES as any, 'readwrite');
@@ -62,6 +74,9 @@ export async function importBackup(file: File): Promise<{ counts: Record<string,
         const { hasBlob, ...rest } = r;
         void hasBlob;
         await tx.objectStore('files').put({ ...rest, blob: blobs.get(r.id) });
+      } else if (s === 'images') {
+        const { hasBlob, ...rest } = r;
+        await tx.objectStore('images').put({ ...rest, blob: hasBlob ? pics.get(r.hash) : undefined });
       } else await tx.objectStore(s as any).put(r);
     }
   }
