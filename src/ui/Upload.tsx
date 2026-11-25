@@ -7,6 +7,7 @@ import { fileKind } from '../ingest/extract';
 import { topUpPool } from '../engine/generate';
 import { settings } from '../settings';
 import { TopBar, go, useAi, useLive } from './common';
+import { Doodles } from './Doodles';
 import { DataNotice, KeyAndCap } from './Setup';
 
 export const pendingKey = (moduleId: string) => `pendingIlos:${moduleId}`;
@@ -83,7 +84,8 @@ export function Upload({ moduleId }: { moduleId: string }) {
   const needsSetup = ai && (ai.reason === 'no-key' || ai.reason === 'no-cap');
 
   return (
-    <>
+    <div class="has-doodles">
+      <Doodles set="upload" />
       <TopBar title={`Upload · ${mod?.short ?? ''}`} back="/" />
       <div class="wrap">
         {needsNotice && <DataNotice onAccept={() => setNoticeDismissed(true)} onDecline={() => setNoticeDismissed(true)} />}
@@ -136,6 +138,19 @@ export function Upload({ moduleId }: { moduleId: string }) {
           )}
         </div>
 
+        {!results && !busy && (
+          <div class="card">
+            <h2>What happens to your files</h2>
+            <ol class="flow">
+              <li><b>Read on this device.</b> Slides split into one passage per slide or page; transcripts into 2-minute passages with timestamps; diagram text read with OCR.</li>
+              <li><b>ILOs found.</b> Copied from "Learning outcomes" slides or your ILO document. You check and confirm them first.</li>
+              <li><b>Passages matched to ILOs.</b> Short excerpts are sent to the model to tag which outcome each slide teaches. ILOs with thin coverage are flagged.</li>
+              <li><b>Questions written as you study.</b> Every question quotes its slide word for word and is rejected if it can't be traced.</li>
+            </ol>
+            <p class="muted small" style={{ marginBottom: 0 }}>Re-uploading a file with the same name updates it and keeps your history. Remove files any time from "What I know".</p>
+          </div>
+        )}
+
         {results && (
           <div class="card">
             <h2>Results</h2>
@@ -166,7 +181,7 @@ export function Upload({ moduleId }: { moduleId: string }) {
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }
 

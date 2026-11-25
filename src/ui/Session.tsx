@@ -13,6 +13,8 @@ import { Bar, Spinner, TopBar, go } from './common';
 import { ClozeInput, McqInput, OrderInput, ShortInput, initialOrder, seededOrder } from './answers';
 import { SourceView } from './SourceView';
 import { syncNow } from '../sync/sync';
+import { Doodles, FootArt } from './Doodles';
+import { where } from './common';
 import { confetti, praise, toast } from './fun';
 import { achievements, loadGame, xpForAttempt, type GameState } from '../engine/game';
 
@@ -43,6 +45,7 @@ export function Session({ moduleId }: { moduleId: string }) {
   const [emptyMsg, setEmptyMsg] = useState('');
   const [now, setNow] = useState(Date.now());
   const [combo, setCombo] = useState(0);
+  const [correctN, setCorrectN] = useState(0);
   const gameRef = useRef<GameState | null>(null);
   const startXp = useRef(0);
   const [sessionXp, setSessionXp] = useState(0);
@@ -131,6 +134,7 @@ export function Session({ moduleId }: { moduleId: string }) {
     setAttempt(a);
     setMark(m);
     setPhase('feedback');
+    if (m.score >= 0.7) setCorrectN((n) => n + 1);
     if (m.score >= 0.99 && resp) {
       const nextCombo = combo + 1;
       setCombo(nextCombo);
@@ -188,8 +192,20 @@ export function Session({ moduleId }: { moduleId: string }) {
   if (phase === 'summary' && summary) return <Summary summary={summary} moduleId={moduleId} xp={sessionXp} game={gameRef.current} />;
 
   return (
-    <>
+    <div class="has-doodles">
+      <Doodles set="session" rotate={answered} />
       <TopBar title="Session" back="/" />
+      {item && phase !== 'loading' && phase !== 'empty' && (
+        <SessionRail
+          elapsed={elapsed}
+          answered={answered}
+          correct={correctN}
+          xp={sessionXp}
+          combo={combo}
+          item={item}
+          ilos={ilos}
+        />
+      )}
       <div class="wrap">
         <div class="session-top small muted">
           <Bar value={elapsed / SESSION_TARGET_MS} thin />
@@ -253,8 +269,9 @@ export function Session({ moduleId }: { moduleId: string }) {
             )}
           </div>
         )}
+        {item && phase !== 'loading' && <FootArt rotate={answered} />}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -440,7 +457,8 @@ function Summary({ summary, moduleId, xp, game }: { summary: SessionSummary; mod
   }, []);
   const headline = pct >= 80 ? 'Outstanding session!' : pct >= 50 ? 'Solid work!' : summary.answered ? "Every mistake here is one you won't make in the exam." : 'Session ended';
   return (
-    <>
+    <div class="has-doodles">
+      <Doodles set="home" />
       <TopBar title="Session complete" back="/" />
       <div class="wrap">
         <div class="card">
@@ -483,6 +501,50 @@ function Summary({ summary, moduleId, xp, game }: { summary: SessionSummary; mod
           <button class="btn ghost" style={{ marginTop: 6, width: '100%' }} onClick={() => go(`/m/${moduleId}`)}>See what I know</button>
         </div>
       </div>
-    </>
+    </div>
+  );
+}
+
+const TYPE_TIP: Record<Item['type'], string> = {
+  mcq: 'Try to answer before reading the options, then pick the one that matches.',
+  cloze: 'One key term from the lecture. Spelling slips are accepted.',
+  short: 'Say why, not just what: the marker looks for each rubric point.',
+  order: 'Picture the process running, then drag the steps into place.',
+};
+
+/** Wide screens: a quiet side panel with session progress and what is being tested. */
+function SessionRail(props: { elapsed: number; answered: number; correct: number; xp: number; combo: number; item: Item; ilos: Map<string, Ilo> }) {
+  const pct = Math.min(1, props.elapsed / SESSION_TARGET_MS);
+  const r = 30, c = 2 * Math.PI * r;
+  const mins = Math.max(0, Math.ceil((SESSION_TARGET_MS - props.elapsed) / 60_000));
+  const ilo = props.ilos.get(props.item.iloIds[0]);
+  return (
+    <aside class="rail" aria-label="Session progress">
+      <div class="rail-card">
+        <div class="rail-ring">
+          <svg width={74} height={74} viewBox="0 0 74 74">
+            <circle cx={37} cy={37} r={r} class="track" />
+            <circle cx={37} cy={37} r={r} class="val" stroke-dasharray={c} stroke-dashoffset={c * (1 - pct)} />
+          </svg>
+          <div><b>{mins}</b><span>min left</span></div>
+        </div>
+        <div class="rail-stats">
+          <div><b>{props.answered}</b><span>answered</span></div>
+          <div><b>{props.answered ? Math.round((props.correct / props.answered) * 100) : 0}%</b><span>correct</span></div>
+          <div><b>{props.xp}</b><span>XP</span></div>
+          <div><b>{props.combo}</b><span>streak</span></div>
+        </div>
+      </div>
+      <div class="rail-card">
+        <div class="rail-h">Now testing</div>
+        <div class="small"><b class="ilo-id">{props.item.iloIds[0]}</b> {ilo?.text}</div>
+        <div class="small muted" style={{ marginTop: 6 }}>From {where(props.item.source.fileName, props.item.source.locator)}</div>
+        <div class="small muted">Level {props.item.level} · {['', 'recall', 'explain', 'apply'][props.item.level]}{props.item.seenCount ? ' · review' : ' · new'}</div>
+      </div>
+      <div class="rail-card">
+        <div class="rail-h">Tip</div>
+        <div class="small">{TYPE_TIP[props.item.type]}</div>
+      </div>
+    </aside>
   );
 }

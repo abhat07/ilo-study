@@ -6,6 +6,7 @@ import { exportBackup, importBackup } from '../backup';
 import { THEMES, settings, type ThemeName } from '../settings';
 import { SyncCard } from './SyncCard';
 import { TopBar, useAi, useLive } from './common';
+import { Doodles } from './Doodles';
 import { DataNotice, KeyAndCap } from './Setup';
 
 const THEME_INFO: Record<ThemeName, { name: string; desc: string; sw: string[] }> = {
@@ -81,7 +82,8 @@ export function Settings() {
   for (const s of spend ?? []) byPurpose.set(s.purpose.split(' ')[0], (byPurpose.get(s.purpose.split(' ')[0]) ?? 0) + s.costGBP);
 
   return (
-    <>
+    <div class="has-doodles">
+      <Doodles set="settings" />
       <TopBar title="Settings" back="/" />
       <div class="wrap">
         <SyncCard />
@@ -178,6 +180,6 @@ export function Settings() {
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }

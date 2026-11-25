@@ -6,6 +6,7 @@ import { topUpPool } from '../engine/generate';
 import { AiUnavailableError } from '../ai/client';
 import { pendingKey } from './Upload';
 import { Spinner, TopBar, go, useLive } from './common';
+import { Doodles } from './Doodles';
 
 interface Row extends IloCandidate {
   isNew: boolean;
@@ -85,7 +86,8 @@ export function IloConfirm({ moduleId }: { moduleId: string }) {
   if (done) {
     const thin = done.cov.filter((c) => c.thin);
     return (
-      <>
+      <div class="has-doodles">
+        <Doodles set="module" />
         <TopBar title={`ILOs · ${mod?.short ?? ''}`} back="/" />
         <div class="wrap">
           <div class="card">
@@ -103,12 +105,13 @@ export function IloConfirm({ moduleId }: { moduleId: string }) {
             <button class="btn primary big" onClick={() => go(`/m/${moduleId}/study`)}>Start a session</button>
           </div>
         </div>
-      </>
+      </div>
     );
   }
 
   return (
-    <>
+    <div class="has-doodles">
+      <Doodles set="module" />
       <TopBar title={`ILOs · ${mod?.short ?? ''}`} back="/" />
       <div class="wrap">
         <div class="card">
@@ -155,6 +158,6 @@ export function IloConfirm({ moduleId }: { moduleId: string }) {
           )}
         </div>
       </div>
-    </>
+    </div>
   );
 }

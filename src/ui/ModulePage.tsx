@@ -7,6 +7,7 @@ import { calibration, estimateMastery, type MasteryEstimate } from '../engine/ma
 import { isGenerating } from '../engine/generate';
 import type { Ilo } from '../types';
 import { Bar, TopBar, go, masteryColor, useLive } from './common';
+import { Doodles } from './Doodles';
 
 async function load(moduleId: string) {
   const d = await db();
@@ -47,7 +48,8 @@ export function ModulePage({ moduleId }: { moduleId: string }) {
   const flagged = items.filter((i) => i.status === 'flagged');
   const active = files.filter((f) => f.status === 'active');
   return (
-    <>
+    <div class="has-doodles">
+      <Doodles set="module" />
       <TopBar title={`What I know · ${mod?.short ?? ''}`} back="/" />
       <div class="wrap">
         <div class="card">
@@ -69,6 +71,8 @@ export function ModulePage({ moduleId }: { moduleId: string }) {
           </div>
           {isGenerating(moduleId) && <p class="small muted">Writing new questions in the background…</p>}
         </div>
+
+        <MasteryOverview rows={rows} />
 
         <div class="card">
           <h2>Outcomes</h2>
@@ -118,7 +122,7 @@ export function ModulePage({ moduleId }: { moduleId: string }) {
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -154,4 +158,42 @@ async function confirmRemove(f: SourceFile) {
   const r = await removeFile(f.id);
   toast(`🗑 Removed ${f.name}: ${r.questions} question${r.questions === 1 ? '' : 's'} retired`);
   if (synced) void syncNow('file removed');
+}
+
+const LABELS = ['Secure', 'Getting there', 'Shaky', 'Not yet', 'No evidence'] as const;
+
+/** At-a-glance chart: how many ILOs sit at each mastery level, and which lectures need work. */
+function MasteryOverview({ rows }: { rows: { ilo: Ilo; m: MasteryEstimate; cov?: { chunks: number; thin: boolean } }[] }) {
+  if (!rows.length) return null;
+  const counts = LABELS.map((l) => rows.filter((r) => r.m.label === l).length);
+  const colours = ['#4ade80', 'var(--brand-3)', 'var(--brand)', 'var(--miss)', 'var(--line)'];
+  const byLecture = new Map<string, number[]>();
+  for (const r of rows) {
+    const k = r.ilo.lecture || 'Other';
+    byLecture.set(k, [...(byLecture.get(k) ?? []), r.m.value]);
+  }
+  const lectures = [...byLecture].map(([k, v]) => ({ k, avg: v.reduce((a, b) => a + b, 0) / v.length, n: v.length }));
+  lectures.sort((a, b) => a.k.localeCompare(b.k, undefined, { numeric: true }));
+  return (
+    <div class="card">
+      <h2>📊 Overview</h2>
+      <div class="stack-bar" role="img" aria-label={LABELS.map((l, i) => `${counts[i]} ${l}`).join(', ')}>
+        {counts.map((c, i) => (c ? <span style={{ flex: c, background: colours[i] }} title={`${c} ${LABELS[i]}`} /> : null))}
+      </div>
+      <div class="legend small">
+        {LABELS.map((l, i) => <span key={l}><i style={{ background: colours[i] }} />{l} <b>{counts[i]}</b></span>)}
+      </div>
+      {lectures.length > 1 && (
+        <div class="lecture-bars">
+          {lectures.map((x) => (
+            <div key={x.k} class="lb">
+              <span class="small" title={x.k}>{x.k.replace(/_/g, ' ')}</span>
+              <Bar value={x.avg} thin color={masteryColor(x.avg)} />
+              <span class="small muted">{Math.round(x.avg * 100)}%</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }

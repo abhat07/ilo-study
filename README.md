@@ -179,7 +179,7 @@ All text and background pairs meet WCAG AA contrast (4.5:1 for body text). Butto
 
 The biology drawings on the home page (ATP, the electron transport chain and ATP synthase, the TCA cycle, B-DNA,
 CRISPR–Cas9, Michaelis–Menten with a Lineweaver–Burk inset, translation, Gs/cAMP/PKA signalling, the nucleosome,
-IgG1, pUC19, a dihybrid cross, an agarose gel and a PCR profile) are hand-written SVG in `src/ui/Doodles.tsx`.
+IgG1, pUC19, a dihybrid cross, an agarose gel and a PCR profile) are hand-written SVG (`src/ui/artHome.tsx`, `artLab.tsx`, `artGenetics.tsx`; placed by `Doodles.tsx`). Each screen has its own set: home (14), question screen (replication fork, Sanger, qPCR, western blot, *lac* operon, splicing; rotating per question), What I know (pedigree, Hardy–Weinberg, crossing over, linkage map, secondary structure, Ramachandran), and upload/settings mixes. On the question screen they are static and dimmed while you answer and brighten slightly on feedback, to limit the "seductive details" distraction; wide screens also get a session side panel (time, answered, % correct, XP, the ILO being tested and a tip).
 They have no image licences, stay sharp at any size, recolour with the theme and work offline. They sit only in
 the page margins and never behind the question card.
 
