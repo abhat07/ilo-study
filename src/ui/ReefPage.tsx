@@ -8,6 +8,7 @@ import { loadReef, POLYP_XP, type ReefState } from '../reef/state';
 import { chooseRestDay } from '../engine/game';
 import { DAILY_GOAL, MAX_FREEZES, REPAIR_GOAL, TIERS, type DayInfo } from '../engine/streak';
 import { notifyChange } from '../db';
+import { MotionChip } from './motion';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -22,7 +23,10 @@ export function ReefPage() {
       <TopBar title="🪸 Your reef" back="/" />
       <div class="wrap">
         <div class="reef-card">
-          <div class="reef-wrap"><ReefTank reef={reef} H={300} /></div>
+          <div class="reef-wrap">
+            <ReefTank reef={reef} H={300} />
+            <div class="reef-hud bottom"><span class="grow" /><MotionChip /></div>
+          </div>
           <ReefNotice reef={reef} />
         </div>
         {reef.pending.length > 0 && (

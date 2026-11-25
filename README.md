@@ -283,6 +283,8 @@ It is all hand-drawn SVG with real species and one true fact each: 67 creatures 
 * **The streak shows in the water.** Tiers (Clear water → Spawning night → Bioluminescence → Thriving reef →
   Ancient reef → Living legend) add light rays, coral spawn, glowing plankton and golden light. Missed days
   **bleach** the coral; one study day brings the colour back.
+* **Motion.** The reef follows the computer's "reduce motion" setting, so it starts still there. The ▶ chip on the
+  reef lets the fish swim anyway (⏸ pauses them). This is saved per device in `localStorage` (`ilo.reefMotion`).
 
 **Streak rules** (`engine/streak.ts`), worked out day by day from your answers:
 

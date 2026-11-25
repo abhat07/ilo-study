@@ -16,6 +16,7 @@ import { toast } from './ui/fun';
 import { topUpPool } from './engine/generate';
 import { mapModule, scrubRemovedFiles } from './ingest/pipeline';
 import { applyTheme } from './settings';
+import { applyReefMotion } from './ui/motion';
 import { startAutoSync } from './sync/sync';
 import { DemoBanner, DemoGate } from './ui/Demo';
 import { isDemo } from './mode';
@@ -99,4 +100,5 @@ function App() {
   );
 }
 
+applyReefMotion();
 render(<App />, document.getElementById('app')!);

@@ -263,7 +263,8 @@ code { background: var(--card-2); padding: 2px 6px; border-radius: 6px; }
   100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
+  /* the reef is exempt when you switch its motion on (ui/motion.tsx) */
+  *:not(.reef-motion .reef-tank *), *::before, *::after { animation: none !important; transition: none !important; }
   .confetti { display: none; }
 }
 
@@ -765,10 +766,9 @@ select { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); 
 @keyframes rfRay { from { opacity: 0.4; } to { opacity: 1; } }
 @keyframes rfRise { 0% { transform: translateY(0); opacity: 0; } 10% { opacity: 0.9; } 100% { transform: translateY(-190px); opacity: 0; } }
 @keyframes rfTwinkle { from { opacity: 0.1; } to { opacity: 0.95; } }
-@media (prefers-reduced-motion: reduce) {
-  .reef-tank * { animation: none !important; }
-
-}
+/* paused with the ⏸ chip, whatever the system setting */
+.reef-still .reef-tank * { animation: none !important; }
+.motion-chip { cursor: pointer; font: inherit; font-size: 0.76rem; font-weight: 750; }
 
 .reef-icon { display: block; margin: 0 auto; }
 .reef-icon.locked { filter: brightness(0) opacity(0.35); }

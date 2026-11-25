@@ -7,6 +7,7 @@ import { choosePick, offersFor, type ReefState } from '../reef/state';
 import { REPAIR_GOAL } from '../engine/streak';
 import { go } from './common';
 import { toast } from './fun';
+import { MotionChip } from './motion';
 
 const W = 480;
 const f = (n: number) => n.toFixed(1);
@@ -202,6 +203,8 @@ export function ReefCard({ reef }: { reef: ReefState }) {
         </div>
         <div class="reef-hud bottom">
           <span class="rchip soft">{si.tier.name}{si.nextTier ? ` · ${si.nextTier.at - g.streak} day${si.nextTier.at - g.streak === 1 ? '' : 's'} to ${si.nextTier.name}` : ''}</span>
+          <span class="grow" />
+          <MotionChip />
         </div>
       </div>
       {reef.pending.length > 0 && (
