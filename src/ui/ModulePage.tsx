@@ -8,6 +8,7 @@ import { isGenerating } from '../engine/generate';
 import type { Ilo } from '../types';
 import { Bar, TopBar, go, masteryColor, useLive } from './common';
 import { Doodles } from './Doodles';
+import { LectureList } from './LectureList';
 
 async function load(moduleId: string) {
   const d = await db();
@@ -72,6 +73,8 @@ export function ModulePage({ moduleId }: { moduleId: string }) {
           {isGenerating(moduleId) && <p class="small muted">Writing new questions in the background…</p>}
         </div>
 
+        <LectureList moduleId={moduleId} />
+
         <MasteryOverview rows={rows} />
 
         <div class="card">
@@ -135,7 +138,7 @@ function IloRow({ ilo, m, cov, items }: { ilo: Ilo; m: MasteryEstimate; cov?: { 
       </div>
       <div class="small" style={{ margin: '4px 0' }}>{ilo.text}</div>
       <Bar value={m.value} color={masteryColor(m.value)} />
-      <details style={{ marginTop: 4 }}>
+      <details style={{ marginTop: '4px' }}>
         <summary class="small">Evidence ({m.evidence})</summary>
         <ul class="small">{m.explanation.map((e) => <li key={e}>{e}</li>)}</ul>
         <div class="small muted">

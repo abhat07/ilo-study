@@ -107,6 +107,11 @@ export interface Item {
   flagReason?: string;
   card: Card; // FSRS state
   seenCount: number;
+  /** lesson questions: which lecture/section/point they test; 'link' questions connect to earlier points */
+  lectureId?: string;
+  sectionId?: string;
+  kind?: 'point' | 'link';
+  pointIndex?: number;
 }
 
 export type Confidence = 1 | 2 | 3 | 4; // guessing, unsure, fairly sure, certain
@@ -192,4 +197,49 @@ export interface IngestEvent {
   at: number;
   fileName: string;
   summary: string;
+}
+
+/** A lecture: its files (slides, transcript) and the ILOs it teaches. Built automatically, editable. */
+export interface Lecture {
+  id: string;
+  moduleId: string;
+  number: number; // 0 = material not tied to a numbered lecture
+  title: string;
+  fileIds: string[];
+  iloIds: string[];
+  updatedAt: number;
+  /** true once you rename or reassign things, so automatic rebuilding leaves your choices alone */
+  userEdited?: boolean;
+}
+
+/** One verified statement in a lesson explanation. */
+export interface LearnPoint {
+  text: string;
+  quote: string; // verbatim from the passage
+  chunkId: string;
+}
+
+export interface Visual {
+  kind: 'process' | 'cycle' | 'compare' | 'parts' | 'none';
+  title: string;
+  /** compare: column headings; others: unused */
+  columns: string[];
+  items: { label: string; detail: string }[];
+}
+
+/** One ILO's lesson inside a lecture: explanation + visual + its questions. */
+export interface LearnSection {
+  id: string;
+  moduleId: string;
+  lectureId: string;
+  iloId: string;
+  order: number;
+  title: string;
+  intro: string;
+  points: LearnPoint[];
+  visual: Visual;
+  chunkIds: string[];
+  itemIds: string[];
+  seenAt?: number;
+  updatedAt: number;
 }

@@ -124,7 +124,7 @@ export function IloConfirm({ moduleId }: { moduleId: string }) {
           {rows?.length === 0 && (
             <div class="notice small">
               No ILOs were found automatically.
-              <div class="row" style={{ marginTop: 8 }}>
+              <div class="row" style={{ marginTop: '8px' }}>
                 <button class="btn sm" onClick={findWithAi} disabled={!!busy}>Find ILOs with AI (≈£0.001)</button>
               </div>
             </div>
@@ -139,20 +139,20 @@ export function IloConfirm({ moduleId }: { moduleId: string }) {
                   <button class="btn sm danger" onClick={() => remove(r.key)}>Delete</button>
                 </span>
               </div>
-              <textarea style={{ minHeight: 60, marginTop: 6 }} value={r.text} onInput={(e) => update(r.key, { text: e.currentTarget.value })} />
-              <input type="text" class="small" style={{ marginTop: 4 }} placeholder="Lecture (optional)" value={r.lecture} onInput={(e) => update(r.key, { lecture: e.currentTarget.value })} />
+              <textarea style={{ minHeight: '60px', marginTop: '6px' }} value={r.text} onInput={(e) => update(r.key, { text: e.currentTarget.value })} />
+              <input type="text" class="small" style={{ marginTop: '4px' }} placeholder="Lecture (optional)" value={r.lecture} onInput={(e) => update(r.key, { lecture: e.currentTarget.value })} />
             </div>
           ))}
-          <details style={{ marginTop: 12 }}>
+          <details style={{ marginTop: '12px' }}>
             <summary>Paste or type ILOs</summary>
             <textarea placeholder="One ILO per line" value={paste} onInput={(e) => setPaste(e.currentTarget.value)} />
-            <button class="btn sm" style={{ marginTop: 6 }} onClick={addPasted}>Add these</button>
+            <button class="btn sm" style={{ marginTop: '6px' }} onClick={addPasted}>Add these</button>
           </details>
-          {err && <div class="err" style={{ marginTop: 10 }}>{err}</div>}
+          {err && <div class="err" style={{ marginTop: '10px' }}>{err}</div>}
           {busy ? (
             <div class="center muted small"><Spinner />{busy}</div>
           ) : (
-            <button class="btn primary big" style={{ marginTop: 14 }} disabled={!rows?.length} onClick={confirmAll}>
+            <button class="btn primary big" style={{ marginTop: '14px' }} disabled={!rows?.length} onClick={confirmAll}>
               Confirm {rows?.length ?? 0} ILOs
             </button>
           )}

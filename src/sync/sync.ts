@@ -84,12 +84,13 @@ export async function exportSnapshot(): Promise<Snapshot> {
   const d = await db();
   const s = emptySnapshot();
   s.at = Date.now();
-  const [modules, files, chunks, ilos, items, attempts, disputes, sessions, spend, genlog, events, keys, vals] = await Promise.all([
+  const [modules, files, chunks, ilos, items, attempts, disputes, sessions, spend, genlog, events, keys, vals, lectures, sections] = await Promise.all([
     d.getAll('modules'), d.getAll('files'), d.getAll('chunks'), d.getAll('ilos'), d.getAll('items'), d.getAll('attempts'),
     d.getAll('disputes'), d.getAll('sessions'), d.getAll('spend'), d.getAll('genlog'), d.getAll('events'), d.getAllKeys('kv'), d.getAll('kv'),
+    d.getAll('lectures'), d.getAll('sections'),
   ]);
   s.stores = {
-    modules, chunks, ilos, items, attempts, disputes, sessions, spend, genlog, events,
+    modules, chunks, ilos, items, attempts, disputes, sessions, spend, genlog, events, lectures, sections,
     files: files.map(({ blob, ...rest }) => (void blob, rest)),
     kv: keys.map((k, i) => ({ key: String(k), value: vals[i] })).filter((k) => k.key.startsWith('explain:')),
   };
@@ -106,7 +107,7 @@ const FILE_SEV = { active: 0, superseded: 1, removed: 2 } as const;
  */
 export async function applySnapshot(m: Snapshot): Promise<number> {
   const d = await db();
-  const stores = ['modules', 'files', 'chunks', 'ilos', 'items', 'attempts', 'disputes', 'sessions', 'spend', 'genlog', 'events', 'kv'] as const;
+  const stores = ['modules', 'files', 'chunks', 'ilos', 'items', 'attempts', 'disputes', 'sessions', 'spend', 'genlog', 'events', 'kv', 'lectures', 'sections'] as const;
   const tx = d.transaction(stores as unknown as typeof stores[number][], 'readwrite');
   let changed = 0;
   const S = m.stores;
@@ -158,6 +159,15 @@ export async function applySnapshot(m: Snapshot): Promise<number> {
   for (const x of S.genlog) if (!(await tx.objectStore('genlog').get(x.cacheKey))) await put('genlog', x);
   for (const x of S.events) if (!(await tx.objectStore('events').get(x.id))) await put('events', x);
   for (const x of S.kv) if ((await tx.objectStore('kv').get(x.key)) === undefined) await put('kv', x.value, x.key);
+  for (const l of S.lectures ?? []) {
+    const cur = await tx.objectStore('lectures').get(l.id);
+    if (!cur || l.updatedAt > cur.updatedAt) await put('lectures', l);
+  }
+  for (const s of S.sections ?? []) {
+    const cur = await tx.objectStore('sections').get(s.id);
+    if (!cur || s.updatedAt > cur.updatedAt) await put('sections', { ...s, seenAt: s.seenAt ?? cur?.seenAt });
+    else if (s.seenAt && !cur.seenAt) await put('sections', { ...cur, seenAt: s.seenAt });
+  }
   await tx.done;
   if (changed) notifyChange();
   return changed;

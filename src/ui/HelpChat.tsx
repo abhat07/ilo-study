@@ -91,7 +91,7 @@ export function HelpChat(props: {
             {turns.map((t, i) => (
               <div key={i} class={`help-msg ${t.role}${t.error ? ' err' : ''}`}>
                 {t.text}
-                {t.beyond && <div class="beyond small" style={{ marginTop: 6 }}><b>Beyond course materials:</b> {t.beyond}</div>}
+                {t.beyond && <div class="beyond small" style={{ marginTop: '6px' }}><b>Beyond course materials:</b> {t.beyond}</div>}
               </div>
             ))}
             {busy && <div class="help-msg helper typing"><i /><i /><i /></div>}

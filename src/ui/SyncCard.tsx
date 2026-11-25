@@ -47,7 +47,7 @@ export function SyncCard() {
           Connected to <code>{syncSettings.repo()}</code> on this {syncSettings.device()}. {status.state === 'syncing' ? 'Syncing…' : last}
           {status.detail && status.state === 'idle' ? ` (${status.detail})` : ''}
         </p>
-        {status.state === 'error' && <div class="err small" style={{ marginBottom: 8 }}>{status.error}</div>}
+        {status.state === 'error' && <div class="err small" style={{ marginBottom: '8px' }}>{status.error}</div>}
         <p class="muted small">
           Syncs automatically when you open the app, after you study or upload, and every 5 minutes. Your API key is not synced: add it on each device.
         </p>
@@ -89,7 +89,7 @@ export function SyncCard() {
       <label class="field">Token</label>
       <input type="password" placeholder="github_pat_…" value={token} onInput={(e) => setToken(e.currentTarget.value)} autocomplete="off" />
       <p class="muted small">Stored only in this browser. Never put in backups or the synced copy.</p>
-      {err && <div class="err small" style={{ marginBottom: 8 }}>{err}</div>}
+      {err && <div class="err small" style={{ marginBottom: '8px' }}>{err}</div>}
       <button class="btn primary" disabled={busy} onClick={connect}>{busy ? 'Connecting…' : 'Connect & sync'}</button>
     </div>
   );

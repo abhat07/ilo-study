@@ -42,19 +42,19 @@ export function SourceView({ item }: { item: Item }) {
 
   return (
     <div class="source">
-      <div class="small muted" style={{ marginBottom: 4 }}>
+      <div class="small muted" style={{ marginBottom: '4px' }}>
         From <b>{where(item.source.fileName, loc)}</b>
         {chunk?.status === 'removed' && <span class="tag bad"> removed from latest upload</span>}
       </div>
       <div>“<mark>{item.source.quote}</mark>”</div>
-      <button class="btn ghost sm" style={{ paddingLeft: 0 }} onClick={() => setOpen(!open)}>
+      <button class="btn ghost sm" style={{ paddingLeft: '0px' }} onClick={() => setOpen(!open)}>
         {open ? 'Hide' : 'Show'} the full {loc.kind === 'time' ? 'transcript passage' : loc.kind === 'page' ? 'page' : 'slide'}
       </button>
       {open && chunk && (
         <div>
           <div class="passage small"><Highlighted text={chunk.text} quote={item.source.quote} /></div>
           {file && (file.blob || (file.kind === 'pdf' && syncSettings.configured())) && loc.kind === 'page' && !img && (
-            <button class="btn sm" style={{ marginTop: 6 }} onClick={showPage} disabled={imgBusy}>
+            <button class="btn sm" style={{ marginTop: '6px' }} onClick={showPage} disabled={imgBusy}>
               {imgBusy ? 'Rendering…' : 'Show original slide'}
             </button>
           )}

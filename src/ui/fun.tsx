@@ -36,7 +36,7 @@ export function MasteryRing({ value, theme, size = 58 }: { value: number; theme:
   const c = 2 * Math.PI * r;
   const id = `rg-${theme.accent.replace(/[^a-z0-9]/gi, '')}`;
   return (
-    <div class="ring" style={{ width: size, height: size }} aria-label={`Average mastery ${Math.round(value * 100)}%`}>
+    <div class="ring" style={{ width: `${size}px`, height: `${size}px` }} aria-label={`Average mastery ${Math.round(value * 100)}%`}>
       <svg width={size} height={size}>
         <defs>
           <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">

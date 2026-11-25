@@ -13,7 +13,7 @@
  *    duplicate questions generated on two devices for the same passage are retired if unanswered
  *  - kv: only cached explanations are synced
  */
-import type { Attempt, Chunk, Dispute, GenLog, Ilo, IngestEvent, Item, Module, SessionRecord, SourceFile, SpendRecord } from '../types';
+import type { Attempt, Chunk, Dispute, GenLog, Ilo, IngestEvent, Item, LearnSection, Lecture, Module, SessionRecord, SourceFile, SpendRecord } from '../types';
 import { replayCard } from '../engine/scheduler';
 
 export type SyncFile = Omit<SourceFile, 'blob'>;
@@ -35,13 +35,15 @@ export interface Snapshot {
     genlog: GenLog[];
     events: IngestEvent[];
     kv: { key: string; value: unknown }[];
+    lectures: Lecture[];
+    sections: LearnSection[];
   };
 }
 
 export function emptySnapshot(): Snapshot {
   return {
     app: 'ilo-study', v: 1, at: 0,
-    stores: { modules: [], files: [], chunks: [], ilos: [], items: [], attempts: [], disputes: [], sessions: [], spend: [], genlog: [], events: [], kv: [] },
+    stores: { modules: [], files: [], chunks: [], ilos: [], items: [], attempts: [], disputes: [], sessions: [], spend: [], genlog: [], events: [], kv: [], lectures: [], sections: [] },
   };
 }
 
@@ -59,7 +61,8 @@ function unionBy<T>(a: T[], b: T[], key: (x: T) => string, pick: (x: T, y: T) =>
 const SEVERITY: Record<Item['status'], number> = { active: 0, flagged: 1, retired: 2 };
 
 export function mergeSnapshots(a: Snapshot, b: Snapshot): Snapshot {
-  const A = a.stores, B = b.stores;
+  // snapshots written before lectures existed lack these stores
+  const A = { ...emptySnapshot().stores, ...a.stores }, B = { ...emptySnapshot().stores, ...b.stores };
 
   const modules = unionBy(A.modules, B.modules, (m) => m.id, (x, y) => ((y.updatedAt ?? y.createdAt) > (x.updatedAt ?? x.createdAt) ? y : x));
 
@@ -135,7 +138,11 @@ export function mergeSnapshots(a: Snapshot, b: Snapshot): Snapshot {
 
   return {
     app: 'ilo-study', v: 1, at: Math.max(a.at, b.at),
-    stores: { modules, files, chunks, ilos, items, attempts, disputes, sessions, spend, genlog, events, kv },
+    stores: {
+      modules, files, chunks, ilos, items, attempts, disputes, sessions, spend, genlog, events, kv,
+      lectures: unionBy(A.lectures, B.lectures, (l) => l.id, (x, y) => (y.updatedAt > x.updatedAt ? y : x)),
+      sections: unionBy(A.sections, B.sections, (s) => s.id, (x, y) => (y.updatedAt > x.updatedAt || (!!y.seenAt && !x.seenAt) ? { ...y, seenAt: y.seenAt ?? x.seenAt } : { ...x, seenAt: x.seenAt ?? y.seenAt })),
+    },
   };
 }
 

@@ -118,7 +118,7 @@ export function Upload({ moduleId }: { moduleId: string }) {
               onChange={(e) => onFiles(e.currentTarget.files)}
             />
           </label>
-          <label class={'btn big' + (busy ? ' disabled' : '')} aria-disabled={busy} style={{ marginTop: 8 }}>
+          <label class={'btn big' + (busy ? ' disabled' : '')} aria-disabled={busy} style={{ marginTop: '8px' }}>
             📄 Choose files
             <input
               type="file"
@@ -129,9 +129,9 @@ export function Upload({ moduleId }: { moduleId: string }) {
               onChange={(e) => onFiles(e.currentTarget.files)}
             />
           </label>
-          {log.length > 0 && <div class="log" style={{ marginTop: 12 }}>{log.slice(-8).join('\n')}</div>}
+          {log.length > 0 && <div class="log" style={{ marginTop: '12px' }}>{log.slice(-8).join('\n')}</div>}
           {skipped.length > 0 && (
-            <details style={{ marginTop: 10 }}>
+            <details style={{ marginTop: '10px' }}>
               <summary class="small">Skipped {skipped.length} unsupported file{skipped.length === 1 ? '' : 's'}</summary>
               <div class="small muted">{skipped.slice(0, 40).join(', ')}{skipped.length > 40 ? '…' : ''}</div>
             </details>
@@ -147,7 +147,7 @@ export function Upload({ moduleId }: { moduleId: string }) {
               <li><b>Passages matched to ILOs.</b> Short excerpts are sent to the model to tag which outcome each slide teaches. ILOs with thin coverage are flagged.</li>
               <li><b>Questions written as you study.</b> Every question quotes its slide word for word and is rejected if it can't be traced.</li>
             </ol>
-            <p class="muted small" style={{ marginBottom: 0 }}>Re-uploading a file with the same name updates it and keeps your history. Remove files any time from "What I know".</p>
+            <p class="muted small" style={{ marginBottom: '0px' }}>Re-uploading a file with the same name updates it and keeps your history. Remove files any time from "What I know".</p>
           </div>
         )}
 

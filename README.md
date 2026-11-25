@@ -140,6 +140,41 @@ Your answers are never deleted.
 
 ---
 
+## Lectures and lessons
+
+Each module is split into **lectures** (`src/learn/lectures.ts`). The split is automatic and free:
+
+* **Files** are grouped by the lecture number in their name: `Lecture_07_Sequencing.pdf` goes to L7, and
+  `Transcript_Lectures_07-08…` goes to both L7 and L8. A module-wide document such as an ILO list for lectures
+  1–9 belongs to no single lecture.
+* **ILOs** go to the lecture whose slides were matched to them most often. An explicit "Lecture N" label wins.
+* You can fix anything under **Lectures → Edit lectures**: rename, add, or move files and ILOs. Your changes
+  are kept when the grouping is rebuilt.
+
+Each lecture is a **lesson path** (`src/learn/sections.ts`, `src/ui/Learn.tsx`), one section per ILO:
+
+1. **Explain.** 4–10 short points written only from that lecture's passages for that ILO; admin and anecdotes
+   are left out. Each point carries a verbatim quote that is checked on the device; points that fail the check
+   are dropped. Points include an **animated visual** (process flow, cycle, comparison table or labelled parts)
+   and **the original slides** (PDF pages rendered; PPTX and transcript passages shown as text).
+2. **Test every point.** The model writes 1–2 questions per point. Any point it misses gets a fill-the-gap made
+   on the device from its quote, so nothing goes untested. **Link questions** follow: short answers that connect
+   this ILO to earlier points in the lecture and the previous lecture, the building blocks of essay answers.
+3. **Wrong answers repeat until right**, after the rest of the section. Every 4th question is a **spaced
+   review** from an earlier section or the previous lecture.
+4. A section is complete only when its explanation has been read **and** the latest answer to every question
+   is right. The lecture's **progress ring** is the average over its ILOs, so it stalls rather than skipping
+   gaps.
+5. At **100%** the lecture switches to **recap**: an FSRS-scheduled session using only that lecture's
+   questions (`#/m/<module>/l/<lecture>/recap`). The home card shows recap counts once a lecture is done.
+
+The home card's main button continues the next unfinished lecture. "🔀 Mixed review" still runs the original
+cross-module session; lesson questions you haven't reached yet are kept out of it.
+
+Cost: one cheap-model call per ILO section, about 0.3p each, so roughly 15p to write lessons for 50 ILOs.
+Sections are written on first open (the first is awaited, the rest continue in the background) and then synced
+like everything else.
+
 ## The learning engine
 
 | Principle | Where it lives |

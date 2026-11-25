@@ -19,6 +19,8 @@ export interface SessionCtx {
   record: SessionRecord;
   served: string[]; // item ids in order
   retry: { itemId: string; after: number }[];
+  /** limit the session to some questions (e.g. one lecture's recap) */
+  filter?: (i: Item) => boolean;
 }
 
 export async function masteryMap(moduleId: string): Promise<Record<string, number>> {
@@ -29,10 +31,10 @@ export async function masteryMap(moduleId: string): Promise<Record<string, numbe
   return out;
 }
 
-export async function startSession(moduleId: string): Promise<SessionCtx> {
+export async function startSession(moduleId: string, filter?: (i: Item) => boolean): Promise<SessionCtx> {
   const record: SessionRecord = { id: uid('se_'), moduleId, startedAt: Date.now(), attemptIds: [], masteryBefore: await masteryMap(moduleId) };
   await (await db()).put('sessions', record);
-  return { record, served: [], retry: [] };
+  return { record, served: [], retry: [], filter };
 }
 
 /** Pure selection so it can be unit-tested. */
@@ -92,7 +94,8 @@ export async function nextItem(ctx: SessionCtx): Promise<Item | null> {
   const moduleId = ctx.record.moduleId;
   if (ctx.served.length >= SESSION_MAX_ITEMS) return null;
   if (Date.now() - ctx.record.startedAt >= SESSION_TARGET_MS && ctx.served.length > 0) return null;
-  const [items, mastery] = await Promise.all([byModule('items', moduleId), masteryMap(moduleId)]);
+  const [all, mastery] = await Promise.all([byModule('items', moduleId), masteryMap(moduleId)]);
+  const items = ctx.filter ? all.filter(ctx.filter) : all;
   const it = selectNext(items, ctx, mastery, (i) => i.source.fileName);
   if (it) {
     ctx.retry = ctx.retry.filter((r) => r.itemId !== it.id);

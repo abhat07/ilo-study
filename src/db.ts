@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type {
-  Attempt, Chunk, Dispute, GenLog, Ilo, IngestEvent, Item, Module, SessionRecord, SourceFile, SpendRecord,
+  Attempt, Chunk, Dispute, GenLog, Ilo, IngestEvent, Item, LearnSection, Lecture, Module, SessionRecord, SourceFile, SpendRecord,
 } from './types';
 
 interface StudyDB extends DBSchema {
@@ -15,23 +15,37 @@ interface StudyDB extends DBSchema {
   spend: { key: string; value: SpendRecord; indexes: { byMonth: string } };
   genlog: { key: string; value: GenLog; indexes: { byModule: string } };
   events: { key: string; value: IngestEvent; indexes: { byModule: string } };
+  lectures: { key: string; value: Lecture; indexes: { byModule: string } };
+  sections: { key: string; value: LearnSection; indexes: { byModule: string; byLecture: string } };
   kv: { key: string; value: unknown };
 }
 
 export type StoreName =
   | 'modules' | 'files' | 'chunks' | 'ilos' | 'items' | 'attempts' | 'disputes'
-  | 'sessions' | 'spend' | 'genlog' | 'events' | 'kv';
+  | 'sessions' | 'spend' | 'genlog' | 'events' | 'kv' | 'lectures' | 'sections';
 
 export const ALL_STORES: StoreName[] = [
-  'modules', 'files', 'chunks', 'ilos', 'items', 'attempts', 'disputes', 'sessions', 'spend', 'genlog', 'events', 'kv',
+  'modules', 'files', 'chunks', 'ilos', 'items', 'attempts', 'disputes', 'sessions', 'spend', 'genlog', 'events', 'kv', 'lectures', 'sections',
 ];
 
 let dbp: Promise<IDBPDatabase<StudyDB>> | null = null;
 
 export function db(): Promise<IDBPDatabase<StudyDB>> {
   if (!dbp) {
-    dbp = openDB<StudyDB>('ilo-study', 1, {
-      upgrade(d) {
+    dbp = openDB<StudyDB>('ilo-study', 2, {
+      // another window still has the old version open: reload it so the upgrade can proceed
+      blocking() {
+        if (typeof location !== 'undefined') location.reload();
+      },
+      upgrade(d, oldVersion) {
+        if (oldVersion < 2) {
+          const lec = d.createObjectStore('lectures', { keyPath: 'id' });
+          lec.createIndex('byModule', 'moduleId');
+          const sec = d.createObjectStore('sections', { keyPath: 'id' });
+          sec.createIndex('byModule', 'moduleId');
+          sec.createIndex('byLecture', 'lectureId');
+        }
+        if (oldVersion >= 1) return;
         d.createObjectStore('modules', { keyPath: 'id' });
         const files = d.createObjectStore('files', { keyPath: 'id' });
         files.createIndex('byModule', 'moduleId');

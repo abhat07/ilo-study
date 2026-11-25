@@ -47,7 +47,7 @@ function NameCard() {
         <input type="text" placeholder="First name" value={name} onInput={(e) => { setName(e.currentTarget.value); setSaved(false); }} />
         <button class="btn primary" onClick={() => { settings.setName(name); setSaved(true); notifyChange(); }}>Save</button>
       </div>
-      {saved && <div class="okbox small" style={{ marginTop: 8 }}>Saved.</div>}
+      {saved && <div class="okbox small" style={{ marginTop: '8px' }}>Saved.</div>}
     </div>
   );
 }
@@ -150,7 +150,7 @@ export function Settings() {
               <input type="file" accept=".zip" hidden onChange={(e) => doImport(e.currentTarget.files?.[0])} />
             </label>
           </div>
-          {msg && <div class="okbox small" style={{ marginTop: 8 }}>{msg}</div>}
+          {msg && <div class="okbox small" style={{ marginTop: '8px' }}>{msg}</div>}
         </div>
 
         <div class="card">

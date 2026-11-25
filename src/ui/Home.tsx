@@ -7,7 +7,9 @@ import { TopBar, go, useAi, useLive } from './common';
 import { settings } from '../settings';
 import { MasteryRing, greeting, themeFor, themeStyle } from './fun';
 import { Doodles } from './Doodles';
+import { Ring } from './Visual';
 import { QUEST_XP, loadGame, type GameState } from '../engine/game';
+import { lectureOverview, nextLecture, type LectureRow } from '../learn/overview';
 
 interface CardInfo {
   m: Module;
@@ -18,6 +20,7 @@ interface CardInfo {
   mastery: number;
   secure: number;
   pendingIlos: boolean;
+  lectures: LectureRow[];
 }
 
 async function load(): Promise<{ cards: CardInfo[]; stats: GameState }> {
@@ -36,6 +39,7 @@ async function load(): Promise<{ cards: CardInfo[]; stats: GameState }> {
       mastery: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0,
       secure: vals.filter((v) => v >= 0.8).length,
       pendingIlos: m.iloStatus !== 'confirmed',
+      lectures: await lectureOverview(m.id),
     });
   }
   const stats = await loadGame();
@@ -107,20 +111,37 @@ function ModuleCard({ c }: { c: CardInfo }) {
     status = <span class="muted">Check and confirm the ILOs so questions can be made.</span>;
     action = { label: '✅ Confirm ILOs', path: `/m/${c.m.id}/ilos` };
   } else {
+    const nl = nextLecture(c.lectures);
+    const doneN = c.lectures.filter((r) => r.st.done).length;
+    const withIlos = c.lectures.filter((r) => r.lecture.iloIds.length).length;
+    const recapDue = c.lectures.reduce((n, r) => n + r.st.due, 0);
     status = (
-      <div class="pill-row">
-        {c.due > 0 && <span class="pill hot">⏰ {c.due} due</span>}
-        {c.fresh > 0 && <span class="pill">✨ {c.fresh} new ready</span>}
-        <span class="pill">🎯 {c.secure}/{c.ilos} ILOs secure</span>
-      </div>
+      <>
+        <div class="pill-row">
+          <span class="pill">📚 {doneN}/{withIlos} lectures complete</span>
+          {recapDue > 0 && <span class="pill hot">⏰ {recapDue} recap due</span>}
+          <span class="pill">🎯 {c.secure}/{c.ilos} ILOs secure</span>
+        </div>
+        {c.lectures.length > 0 && (
+          <div class="mini-rings" aria-label="Lecture progress">
+            {c.lectures.filter((r) => r.lecture.iloIds.length).map((r) => (
+              <button key={r.lecture.id} class={'mr' + (nl?.lecture.id === r.lecture.id ? ' now' : '')} title={`${r.lecture.title}: ${Math.round(r.st.frac * 100)}%`} onClick={() => go(`/m/${c.m.id}/l/${r.lecture.id}`)}>
+                <Ring value={r.st.frac} size={34} stroke={4} label={r.lecture.number ? String(r.lecture.number) : '•'} />
+              </button>
+            ))}
+          </div>
+        )}
+      </>
     );
-    action = { label: '▶  Start', path: `/m/${c.m.id}/study` };
+    action = nl
+      ? { label: `▶  ${nl.st.started ? 'Continue' : 'Start'} L${nl.lecture.number} · ${nl.lecture.title}`, path: `/m/${c.m.id}/l/${nl.lecture.id}` }
+      : { label: recapDue ? `🔁 Recap (${recapDue} due)` : '🔀 Mixed review', path: `/m/${c.m.id}/study` };
   }
   return (
     <div class="card module-card" style={themeStyle(theme)}>
       <div class="head">
         <div class="emoji" aria-hidden="true">{theme.emoji}</div>
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: '0px' }}>
           <div class="code">{c.m.id} · {c.m.short}</div>
           <h2>{c.m.name}</h2>
         </div>
@@ -129,9 +150,10 @@ function ModuleCard({ c }: { c: CardInfo }) {
       <div class="status">{status}</div>
       <button class={'btn primary big' + (ready && c.due > 0 ? ' glow' : '')} onClick={() => go(action.path)}>{action.label}</button>
       {c.files > 0 && (
-        <div class="row" style={{ marginTop: 10 }}>
+        <div class="row" style={{ marginTop: '10px' }}>
           <button class="btn sm" onClick={() => go(`/m/${c.m.id}/upload`)}>📤 Upload</button>
-          <button class="btn sm" onClick={() => go(`/m/${c.m.id}`)}>📊 What I know</button>
+          <button class="btn sm" onClick={() => go(`/m/${c.m.id}`)}>📚 Lectures & progress</button>
+          {ready && <button class="btn sm" onClick={() => go(`/m/${c.m.id}/study`)}>🔀 Mixed review</button>}
         </div>
       )}
     </div>
@@ -163,8 +185,8 @@ function AddModule({ onDone }: { onDone: () => void }) {
       <input type="text" placeholder="BIP" value={short} onInput={(e) => setShort(e.currentTarget.value)} />
       <label class="field">Full name</label>
       <input type="text" placeholder="Bioinformatics & Programming" value={name} onInput={(e) => setName(e.currentTarget.value)} />
-      {err && <div class="err" style={{ marginTop: 8 }}>{err}</div>}
-      <div class="row" style={{ marginTop: 12 }}>
+      {err && <div class="err" style={{ marginTop: '8px' }}>{err}</div>}
+      <div class="row" style={{ marginTop: '12px' }}>
         <button class="btn primary" onClick={save}>Add</button>
         <button class="btn" onClick={onDone}>Cancel</button>
       </div>
@@ -187,7 +209,7 @@ function Quests({ g }: { g: GameState }) {
           <span class="qx">{q.progress}/{q.target}</span>
         </div>
       ))}
-      <p class="muted small" style={{ marginBottom: 0 }}>New quests every day.</p>
+      <p class="muted small" style={{ marginBottom: '0px' }}>New quests every day.</p>
     </div>
   );
 }
@@ -205,7 +227,7 @@ function BadgeShelf({ g }: { g: GameState }) {
           </div>
         ))}
       </div>
-      <p class="muted small" style={{ marginBottom: 0 }}>Hover or long-press a badge to see how to earn it.</p>
+      <p class="muted small" style={{ marginBottom: '0px' }}>Hover or long-press a badge to see how to earn it.</p>
     </div>
   );
 }

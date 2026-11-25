@@ -74,6 +74,39 @@ export function mockRespond(call: JsonCall): unknown {
       feedback: 'This is a mock mark used for testing the app without an API key.',
     } satisfies MarkOut;
   }
+  if (call.purpose.startsWith('lesson')) {
+    // Dev-only fake lesson: points are the passages' own sentences, so quotes are verbatim.
+    const passages = [...u.matchAll(/<passage id="([^"]+)" where="[^"]*">\n([\s\S]*?)\n<\/passage>/g)];
+    const points: { text: string; quote: string; passage_id: string }[] = [];
+    for (const [, pid, text] of passages) {
+      for (const s of text.split(/(?<=[.!?])\s+|\n+/).map((x) => x.trim()).filter((x) => x.split(/\s+/).length >= 8)) {
+        if (points.length < 6) points.push({ text: s, quote: s, passage_id: pid });
+      }
+    }
+    const questions = points.map((p, i) => {
+      const ws = p.quote.split(/\s+/);
+      const k = ws.reduce((b, w, j) => (w.replace(/\W/g, '').length > ws[b].replace(/\W/g, '').length ? j : b), 0);
+      const key = ws[k].replace(/[^\w-]/g, '');
+      return {
+        type: 'cloze' as const, transfer: false, prompt: ws.map((w, j) => (j === k ? '____' : w)).join(' '), options: [], correct_index: 0,
+        option_explanations: [], answer: key, accepted_answers: [], steps: [], explanation: p.text, rubric: [], elaboration_prompt: '',
+        elaboration_answer: '', source_quote: p.quote, beyond_materials: '', point_index: i, link_points: [] as string[], passage_id: p.passage_id,
+      };
+    });
+    if (points.length >= 2) {
+      questions.push({
+        type: 'short' as any, transfer: false, prompt: 'Explain how the first and last ideas in this section are connected.', options: [], correct_index: 0,
+        option_explanations: [], answer: points[0].text + ' ' + points[points.length - 1].text, accepted_answers: [], steps: [], explanation: 'Mock link question.',
+        rubric: [{ point: 'States the first idea', marks: 1 }, { point: 'Connects it to the last idea', marks: 1 }] as any, elaboration_prompt: '', elaboration_answer: '',
+        source_quote: points[0].quote, beyond_materials: '', point_index: -1, link_points: ['E1'], passage_id: points[0].passage_id,
+      });
+    }
+    return {
+      title: 'Mock lesson section', intro: 'Mock intro written from the slides for testing.', points,
+      visual: { kind: 'process', title: 'Key steps', columns: [], items: points.slice(0, 4).map((p, i) => ({ label: `Step ${i + 1}`, detail: p.text.split(' ').slice(0, 10).join(' ') })) },
+      questions,
+    };
+  }
   if (call.purpose.startsWith('tutor')) {
     const answered = u.includes('STATUS: the student has answered');
     return {

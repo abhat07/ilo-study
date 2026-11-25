@@ -6,7 +6,7 @@ import { maskKey, settings } from '../settings';
 export function DataNotice({ onAccept, onDecline }: { onAccept: () => void; onDecline?: () => void }) {
   return (
     <div class="notice">
-      <h2 style={{ marginTop: 0, fontSize: '1.05rem' }}>Before anything is sent</h2>
+      <h2 style={{ marginTop: '0px', fontSize: '1.05rem' }}>Before anything is sent</h2>
       <p class="small">
         Your files are read <b>on this device</b> (text extraction and OCR happen locally). To build and mark questions,
         the app sends <b>the text of the relevant passages</b> — one slide or transcript section at a time, never whole

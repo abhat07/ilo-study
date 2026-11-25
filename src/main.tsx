@@ -9,6 +9,8 @@ import { Upload } from './ui/Upload';
 import { IloConfirm } from './ui/IloConfirm';
 import { Session } from './ui/Session';
 import { ModulePage } from './ui/ModulePage';
+import { Learn } from './ui/Learn';
+import { LectureEdit } from './ui/LectureEdit';
 import { topUpPool } from './engine/generate';
 import { mapModule, scrubRemovedFiles } from './ingest/pipeline';
 import { applyTheme } from './settings';
@@ -68,6 +70,11 @@ function App() {
     if (parts[2] === 'upload') return <Upload key={id} moduleId={id} />;
     if (parts[2] === 'ilos') return <IloConfirm key={id} moduleId={id} />;
     if (parts[2] === 'study') return <Session key={route} moduleId={id} />;
+    if (parts[2] === 'lectures') return <LectureEdit key={id} moduleId={id} />;
+    if (parts[2] === 'l' && parts[3]) {
+      if (parts[4] === 'recap') return <Session key={route} moduleId={id} lectureId={parts[3]} />;
+      return <Learn key={route} moduleId={id} lectureId={parts[3]} />;
+    }
     return <ModulePage key={id} moduleId={id} />;
   }
   return <Home />;
