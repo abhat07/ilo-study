@@ -114,7 +114,9 @@ async function realCall<T>(call: JsonCall): Promise<T> {
   const { client, Anthropic } = await getClient();
   let response;
   try {
-    response = await client.beta.messages.create({
+    // Streamed, then collected: the SDK refuses large non-streaming requests (lessons ask for 24k tokens)
+    // because they could outlast its 10-minute HTTP timeout. Same result and cost either way.
+    response = await client.beta.messages.stream({
       model,
       max_tokens: call.maxTokens,
       system: call.system,
@@ -124,7 +126,7 @@ async function realCall<T>(call: JsonCall): Promise<T> {
       ...(call.tier === 'PRECISE'
         ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const }
         : {}),
-    });
+    }).finalMessage();
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError)
       throw new AiUnavailableError('auth', 'The API key was rejected. Check it in Settings.');
