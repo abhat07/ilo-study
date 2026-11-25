@@ -150,7 +150,11 @@ export function mergeSnapshots(a: Snapshot, b: Snapshot): Snapshot {
         uploaded: !!(x.uploaded || y.uploaded) || undefined,
         pruned: !!(x.pruned || y.pruned) || undefined,
       })),
-      sections: unionBy(A.sections, B.sections, (s) => s.id, (x, y) => (y.updatedAt > x.updatedAt || (!!y.seenAt && !x.seenAt) ? { ...y, seenAt: y.seenAt ?? x.seenAt } : { ...x, seenAt: x.seenAt ?? y.seenAt })),
+      sections: unionBy(A.sections, B.sections, (s) => s.id, (x, y) => {
+        const base = y.updatedAt > x.updatedAt || (!!y.seenAt && !x.seenAt) ? y : x;
+        const readTo = Math.max(x.readTo ?? 0, y.readTo ?? 0);
+        return { ...base, seenAt: x.seenAt ?? y.seenAt, ...(readTo ? { readTo } : {}) };
+      }),
     },
   };
 }

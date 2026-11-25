@@ -8,24 +8,25 @@
  */
 import type { Visual as V } from '../types';
 
-export function Visual({ v }: { v: V }) {
+export function Visual({ v, active }: { v: V; active?: number }) {
   if (v.kind === 'none' || v.items.length < 2) return null;
+  const on = active !== undefined && active >= 0 && active < v.items.length ? active : undefined;
   return (
-    <figure class={`vis vis-${v.kind}`}>
+    <figure class={`vis vis-${v.kind}` + (on !== undefined ? ' has-active' : '')} style={on !== undefined ? { '--on': on } : undefined}>
       {v.title && <figcaption>{v.title}</figcaption>}
-      {v.kind === 'process' && <Process v={v} />}
-      {v.kind === 'cycle' && <Cycle v={v} />}
-      {v.kind === 'compare' && <Compare v={v} />}
-      {v.kind === 'parts' && <Parts v={v} />}
+      {v.kind === 'process' && <Process v={v} on={on} />}
+      {v.kind === 'cycle' && <Cycle v={v} on={on} />}
+      {v.kind === 'compare' && <Compare v={v} on={on} />}
+      {v.kind === 'parts' && <Parts v={v} on={on} />}
     </figure>
   );
 }
 
-function Process({ v }: { v: V }) {
+function Process({ v, on }: { v: V; on?: number }) {
   return (
     <ol class="proc">
       {v.items.map((it, i) => (
-        <li key={i} style={{ '--i': i }}>
+        <li key={i} class={on === i ? 'on' : ''} style={{ '--i': i }}>
           <span class="n">{i + 1}</span>
           <div>
             <b>{it.label}</b>
@@ -38,7 +39,7 @@ function Process({ v }: { v: V }) {
   );
 }
 
-function Cycle({ v }: { v: V }) {
+function Cycle({ v, on }: { v: V; on?: number }) {
   const n = v.items.length;
   const R = 110, cx = 160, cy = 140;
   const pos = (k: number) => {
@@ -53,7 +54,7 @@ function Cycle({ v }: { v: V }) {
         {v.items.map((it, k) => {
           const [x, y] = pos(k);
           return (
-            <g key={k} class="node" style={{ '--i': k }}>
+            <g key={k} class={'node' + (on === k ? ' on' : '')} style={{ '--i': k }}>
               <circle cx={x} cy={y} r={16} />
               <text x={x} y={y + 4} text-anchor="middle">{k + 1}</text>
             </g>
@@ -62,14 +63,14 @@ function Cycle({ v }: { v: V }) {
       </svg>
       <ol class="cyc-legend">
         {v.items.map((it, k) => (
-          <li key={k} style={{ '--i': k }}><b>{it.label}</b>{it.detail && <span> — {it.detail}</span>}</li>
+          <li key={k} class={on === k ? 'on' : ''} style={{ '--i': k }}><b>{it.label}</b>{it.detail && <span> — {it.detail}</span>}</li>
         ))}
       </ol>
     </div>
   );
 }
 
-function Compare({ v }: { v: V }) {
+function Compare({ v, on }: { v: V; on?: number }) {
   const cols = v.columns.length ? v.columns : ['', ''];
   return (
     <div class="cmp-wrap">
@@ -81,7 +82,7 @@ function Compare({ v }: { v: V }) {
           {v.items.map((it, i) => {
             const cells = it.detail.split('|').map((s) => s.trim());
             return (
-              <tr key={i} style={{ '--i': i }}>
+              <tr key={i} class={on === i ? 'on' : ''} style={{ '--i': i }}>
                 <th>{it.label}</th>
                 {cols.map((_, k) => <td key={k}>{cells[k] ?? ''}</td>)}
               </tr>
@@ -93,13 +94,13 @@ function Compare({ v }: { v: V }) {
   );
 }
 
-function Parts({ v }: { v: V }) {
+function Parts({ v, on }: { v: V; on?: number }) {
   return (
     <div class="parts">
       <div class="hub">{v.title || 'Components'}</div>
       <div class="spokes">
         {v.items.map((it, i) => (
-          <div key={i} class="spoke" style={{ '--i': i }}>
+          <div key={i} class={'spoke' + (on === i ? ' on' : '')} style={{ '--i': i }}>
             <b>{it.label}</b>
             {it.detail && <span>{it.detail}</span>}
           </div>

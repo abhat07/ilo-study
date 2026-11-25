@@ -1,4 +1,5 @@
-import { lectureOverview, nextLecture } from '../learn/overview';
+import { lectureOverview, nextLecture, type LectureRow } from '../learn/overview';
+import { fmtMin } from '../learn/progress';
 import { go, useLive } from './common';
 import { Ring } from './Visual';
 
@@ -23,8 +24,9 @@ export function LectureList({ moduleId }: { moduleId: string }) {
         <a class="small" href={`#/m/${moduleId}/lectures`}>Edit lectures</a>
       </div>
       <p class="small muted" style={{ marginTop: '0px' }}>
-        Each lecture is a lesson: short explanations from your slides, then questions on every point. Wrong answers repeat until
-        right; at 100% the lecture moves to spaced recap.
+        Each lecture is a lesson taught in small steps from your slides: one idea, a question on it, a question linking it back,
+        then the next idea. Wrong answers repeat until right; at 100% the lecture moves to spaced recap. Times are estimates
+        and adjust to your own pace once you have answered a few questions.
       </p>
       {totalDue > 0 && <div class="pill-row" style={{ marginBottom: '8px' }}><span class="pill hot">⏰ {totalDue} recap questions due</span></div>}
       <div class="lec-list">
@@ -43,6 +45,7 @@ export function LectureList({ moduleId }: { moduleId: string }) {
                   {L.iloIds.length} ILO{L.iloIds.length === 1 ? '' : 's'} · {L.fileIds.length} file{L.fileIds.length === 1 ? '' : 's'}
                   {r.questions ? ` · ${r.correct}/${r.questions} questions right` : ''}
                 </div>
+                {L.iloIds.length > 0 && <div class="small lec-time">⏱ {timeText(r)}</div>}
               </div>
               {L.iloIds.length > 0 ? (
                 <button class={'btn sm' + (isNext || (r.st.done && r.st.due) ? ' primary' : '')} onClick={() => go(path)}>{label}</button>
@@ -55,4 +58,11 @@ export function LectureList({ moduleId }: { moduleId: string }) {
       </div>
     </div>
   );
+}
+
+/** "≈ 25 min", "≈ 12 min left", "recap ≈ 4 min" */
+export function timeText(r: LectureRow): string {
+  if (r.st.done) return r.mins.recap ? `recap ≈ ${fmtMin(r.mins.recap)}` : `≈ ${fmtMin(r.mins.total)} in total · nothing due`;
+  if (r.st.started) return `≈ ${fmtMin(r.mins.left)} left of ≈ ${fmtMin(r.mins.total)}`;
+  return `≈ ${fmtMin(r.mins.total)}`;
 }

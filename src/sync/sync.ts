@@ -168,8 +168,9 @@ export async function applySnapshot(m: Snapshot): Promise<number> {
   }
   for (const s of S.sections ?? []) {
     const cur = await tx.objectStore('sections').get(s.id);
-    if (!cur || s.updatedAt > cur.updatedAt) await put('sections', { ...s, seenAt: s.seenAt ?? cur?.seenAt });
-    else if (s.seenAt && !cur.seenAt) await put('sections', { ...cur, seenAt: s.seenAt });
+    const readTo = Math.max(s.readTo ?? 0, cur?.readTo ?? 0) || undefined;
+    if (!cur || s.updatedAt > cur.updatedAt) await put('sections', { ...s, seenAt: s.seenAt ?? cur?.seenAt, readTo });
+    else if ((s.seenAt && !cur.seenAt) || (s.readTo ?? 0) > (cur.readTo ?? 0)) await put('sections', { ...cur, seenAt: cur.seenAt ?? s.seenAt, readTo });
   }
   for (const im of S.images ?? []) {
     const cur = await tx.objectStore('images').get(im.id);

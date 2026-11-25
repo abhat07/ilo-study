@@ -88,3 +88,46 @@ describe('lesson progress', () => {
     expect(st2.frac).toBe(1);
   });
 });
+
+import { DEFAULT_PACE, lectureMinutes, nextLessonStep } from '../src/learn/progress';
+
+describe('step-by-step lessons', () => {
+  const pts = ['Denaturation', 'Annealing', 'Extension'].map((label) => ({ label, text: `${label} happens at a set temperature in each cycle.`, quote: 'q', chunkId: 'c' }));
+  const items = new Map([
+    ['d', it2('d', { pointIndex: 0 })],
+    ['a', it2('a', { pointIndex: 1 })],
+    ['a-link', it2('a-link', { pointIndex: 1, kind: 'link', type: 'short' })],
+    ['e', it2('e', { pointIndex: 2 })],
+    ['end', it2('end', { pointIndex: -1, kind: 'link', type: 'short' })],
+  ]);
+  const s = (readTo: number): LearnSection => ({ ...sec('S1', [...items.keys()]), points: pts, readTo });
+  const step = (readTo: number, attempts: Attempt[], asked: string[] = []) =>
+    nextLessonStep({ section: s(readTo), items, latest: latestScores(attempts), askedThisSitting: asked, reviewPool: [] });
+
+  it('reads a step, asks its question, links it back, then moves on', () => {
+    expect(step(0, [])).toEqual({ kind: 'read', index: 0 });
+    expect((step(1, []) as any).item.id).toBe('d');
+    expect(step(1, [at('d', 1, 1)])).toEqual({ kind: 'read', index: 1 });
+    expect((step(2, [at('d', 1, 1)]) as any).item.id).toBe('a');
+    expect((step(2, [at('d', 1, 1), at('a', 1, 2)]) as any).item.id).toBe('a-link');
+    expect(step(2, [at('d', 1, 1), at('a', 1, 2), at('a-link', 1, 3)])).toEqual({ kind: 'read', index: 2 });
+  });
+  it('retries a wrong answer before the next step, then finishes with end-of-section links', () => {
+    const wrongD = [at('d', 0, 1), at('a', 1, 2), at('a-link', 1, 3)];
+    expect((step(2, wrongD, ['d', 'a', 'a-link']) as any).item.id).toBe('d');
+    const allRead = [at('d', 1, 4), at('a', 1, 2), at('a-link', 1, 3), at('e', 1, 5)];
+    expect((step(3, allRead) as any).item.id).toBe('end');
+    expect(step(3, [...allRead, at('end', 1, 6)])).toBeNull();
+  });
+  it('counts steps read towards progress, and estimates time left', () => {
+    const lec: Lecture = { id: 'L1', moduleId: 'M', number: 1, title: 'x', fileIds: [], iloIds: ['S1'], updatedAt: 0 };
+    expect(sectionState(s(1), items, latestScores([])).frac).toBeCloseTo(0.1 / 3);
+    const fresh = lectureMinutes(lec, [s(0)], items, latestScores([]), DEFAULT_PACE);
+    expect(fresh.total).toBeGreaterThan(3);
+    expect(fresh.left).toBeGreaterThanOrEqual(fresh.total);
+    const all = [at('d', 1, 1), at('a', 1, 2), at('a-link', 1, 3), at('e', 1, 4), at('end', 1, 5)];
+    expect(lectureMinutes(lec, [s(3)], items, latestScores(all), DEFAULT_PACE).left).toBe(0);
+    // an ILO without a written section yet counts like the written ones
+    expect(lectureMinutes({ ...lec, iloIds: ['S1', 'S2'] }, [s(3)], items, latestScores(all)).left).toBe(lectureMinutes(lec, [s(3)], items, latestScores(all)).total);
+  });
+});

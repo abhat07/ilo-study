@@ -33,6 +33,8 @@ export function QuestionCard(props: {
   onAnswered: (a: Attempt, m: MarkDetail) => void;
   onNext: () => void;
   onXp: () => void;
+  /** label for the button after feedback, e.g. "Next: Annealing →" */
+  nextLabel?: string;
 }) {
   const { item, ilos } = props;
   const [phase, setPhase] = useState<QPhase>('answer');
@@ -129,7 +131,7 @@ export function QuestionCard(props: {
         )}
 
         {phase === 'feedback' && mark && attempt && (
-          <Feedback item={item} mark={mark} attempt={attempt} order={order} choice={choice} ctx={props.ctx} onNext={props.onNext} onXp={props.onXp} />
+          <Feedback item={item} mark={mark} attempt={attempt} order={order} choice={choice} ctx={props.ctx} onNext={props.onNext} onXp={props.onXp} nextLabel={props.nextLabel} />
         )}
       </div>
       <HelpChat
@@ -173,7 +175,7 @@ function verdict(score: number, seed: number) {
   return { cls: 'bad', txt: score > 0 ? `Not quite (${Math.round(score * 100)}%)` : 'Not this time', emoji: '🧩' };
 }
 
-function Feedback(props: { item: Item; mark: MarkDetail; attempt: Attempt; order: string[]; choice: number | null; ctx: SessionCtx; onNext: () => void; onXp: () => void }) {
+function Feedback(props: { item: Item; mark: MarkDetail; attempt: Attempt; order: string[]; choice: number | null; ctx: SessionCtx; onNext: () => void; onXp: () => void; nextLabel?: string }) {
   const { item, mark, attempt } = props;
   const v = verdict(mark.score, attempt.at);
   const xp = xpForAttempt(attempt);
@@ -311,7 +313,7 @@ function Feedback(props: { item: Item; mark: MarkDetail; attempt: Attempt; order
         </div>
       )}
 
-      <button class="btn primary big" onClick={props.onNext}>Next  →</button>
+      <button class="btn primary big" onClick={props.onNext}>{props.nextLabel ?? 'Next  →'}</button>
     </div>
   );
 }

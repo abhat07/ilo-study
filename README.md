@@ -171,28 +171,41 @@ Each module is split into **lectures** (`src/learn/lectures.ts`). The split is a
 * You can fix anything under **Lectures → Edit lectures**: rename, add, or move files and ILOs. Your changes
   are kept when the grouping is rebuilt.
 
-Each lecture is a **lesson path** (`src/learn/sections.ts`, `src/ui/Learn.tsx`), one section per ILO:
+Each lecture is a **lesson path** (`src/learn/sections.ts`, `src/ui/Learn.tsx`), one section per ILO, taught in
+**small steps**:
 
-1. **Explain.** 4–10 short points written only from that lecture's passages for that ILO; admin and anecdotes
-   are left out. Each point carries a verbatim quote that is checked on the device; points that fail the check
-   are dropped. Points include an **animated visual** (process flow, cycle, comparison table or labelled parts)
-   and **the original slides** (PDF pages rendered; PowerPoint slides show their own pictures; transcript
-   passages shown as text). Slides with pictures are shown first. Tap one to enlarge it.
-2. **Test every point.** The model writes 1–2 questions per point. Any point it misses gets a fill-the-gap made
-   on the device from its quote, so nothing goes untested. **Link questions** follow: short answers that connect
-   this ILO to earlier points in the lecture and the previous lecture, the building blocks of essay answers.
-3. **Wrong answers repeat until right**, after the rest of the section. Every 4th question is a **spaced
-   review** from an earlier section or the previous lecture.
-4. A section is complete only when its explanation has been read **and** the latest answer to every question
-   is right. The lecture's **progress ring** is the average over its ILOs, so it stalls rather than skipping
-   gaps.
-5. At **100%** the lecture switches to **recap**: an FSRS-scheduled session using only that lecture's
-   questions (`#/m/<module>/l/<lecture>/recap`). The home card shows recap counts once a lecture is done.
+1. **One idea at a time.** The section is broken into 5–14 steps in teaching order (for PCR: what PCR does →
+   denaturation → annealing → extension → why it repeats). Each step has a short name, 1–3 sentences written only
+   from that lecture's passages, and a verbatim quote checked on the device (steps that fail the check are
+   dropped). Admin and anecdotes are left out. Each step card shows the section's **animated diagram with this
+   step highlighted** and **the slide it comes from** (PDF page or PowerPoint pictures).
+2. **Question on that step straight away.** Press "Got it" and answer 1–2 questions on just that idea. Any step
+   the model missed gets an on-device fill-the-gap from its quote, so nothing goes untested.
+3. **Link it back.** From the second step on, a question ties the new step to an earlier one ("Why must
+   denaturation happen before the primers can anneal?", or put the steps so far in order).
+4. **Arrow on.** The button names the next step ("Next: Annealing →"). Before moving on, anything you got wrong
+   a little earlier comes back for another try. Every 5th question in a row is a **spaced review** from an
+   earlier section or the previous lecture.
+5. **End of section.** Link questions to earlier sections and the previous lecture (essay building blocks), then
+   anything still wrong repeats until right. A section is complete only when every step is read **and** the
+   latest answer to every question is right. The lecture's **progress ring** averages its sections, so it stalls
+   rather than skipping gaps.
+6. At **100%** the lecture switches to **recap**: an FSRS-scheduled session using only that lecture's questions
+   (`#/m/<module>/l/<lecture>/recap`).
+
+**Time estimates.** Each lecture shows roughly how long it takes and how much is left (lecture list, home button,
+lesson header): reading time per step plus a time per question type (fill-the-gap 30 s, multiple choice 35 s,
+put-in-order 50 s, short answer 100 s, with an allowance for repeats). After 5 answers of a type, your own median
+time is used instead. Sections not written yet are counted like the written ones (9 minutes each before any
+exist). Done lectures show the time for the recap that is due.
+
+Sections written in the older format are rewritten step by step the first time you open the lecture, as long as you
+haven't started them. Sections you've started keep their questions and answers.
 
 The home card's main button continues the next unfinished lecture. "🔀 Mixed review" still runs the original
 cross-module session; lesson questions you haven't reached yet are kept out of it.
 
-Cost: one cheap-model call per ILO section, about 0.3p each, so roughly 15p to write lessons for 50 ILOs.
+Cost: one cheap-model call per ILO section, about 0.5p each with the finer steps, so roughly 25p to write lessons for 50 ILOs.
 Sections are written on first open (the first is awaited, the rest continue in the background) and then synced
 like everything else.
 

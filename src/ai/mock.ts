@@ -4,7 +4,7 @@
  * localStorage['ilo.mock']='1'. Never used for real material outside those.
  */
 import type { JsonCall } from './client';
-import { DEMO_VISUALS } from '../demo/content';
+import { DEMO_LABELS, DEMO_VISUALS } from '../demo/content';
 import type { GenItemOut, GenOut, MapOut, MarkOut, ExplainOut, IloOut } from './prompts';
 
 const words = (s: string) => s.toLowerCase().match(/[a-z0-9']{4,}/g) ?? [];
@@ -83,14 +83,33 @@ export function mockRespond(call: JsonCall): unknown {
     // Fake lesson: points are the passages' own sentences (so quotes are verbatim); every question type is used.
     const iloLine = (u.match(/^ILO ([A-Z]+-\d+): (.*)$/m) ?? []) as string[];
     const passages = [...u.matchAll(/<passage id="([^"]+)" where="[^"]*">\n([\s\S]*?)\n<\/passage>/g)];
-    const points: { text: string; quote: string; passage_id: string }[] = [];
+    const points: { text: string; quote: string; passage_id: string; label?: string; visual_item?: number }[] = [];
     const seenP = new Set<string>();
     for (const [, pid, text] of passages) {
       for (const sen of text.split(/(?<=[.!?])\s+|\n+/).map((x) => x.replace(/^Speaker notes:\s*/, '').trim()).filter((x) => x.split(/\s+/).length >= 8 && !/^\d+\./.test(x) && /[.!?]$/.test(x))) {
         const k = sen.toLowerCase();
-        if (points.length < 6 && !seenP.has(k)) { seenP.add(k); points.push({ text: sen, quote: sen, passage_id: pid }); }
+        if (points.length < 8 && !seenP.has(k)) { seenP.add(k); points.push({ text: sen, quote: sen, passage_id: pid }); }
       }
     }
+    const visual = (iloLine[1] && DEMO_VISUALS[iloLine[1]]) || {
+      kind: 'process', title: 'Key ideas', columns: [], items: points.slice(0, 5).map((x, i) => ({ label: `${i + 1}`, detail: x.text.split(' ').slice(0, 8).join(' ') + '…' })),
+    };
+    // step labels: a diagram label the sentence starts with, else its first words
+    const labelled = points.map((pt, i) => {
+      const low = pt.text.toLowerCase();
+      const starts = visual.items.findIndex((it) => low.startsWith(it.label.toLowerCase().replace(/^\d+$/, '#')));
+      const mentions = visual.items.findIndex((it) => it.label.length > 3 && low.includes(it.label.toLowerCase()));
+      // fallback name: the sentence's subject (words before its verb), without a leading article
+      const VERB = /^(has|have|is|are|was|were|lets|let|breaks|comes|lacks|removes|recognises|recognise|cuts|leaves|contains|anneal|seals|gives|runs|run|migrates|forms|move|moves|separates|doubles|can|reaches|need|needs|does|means|allows|usually|then|also|so|because|in)$/i;
+      const ws = pt.text.replace(/[,:;].*$/, '').split(/\s+/);
+      const cut = ws.findIndex((w, j) => j > 0 && VERB.test(w));
+      const subj = ws.slice(0, cut > 0 ? Math.min(cut, 5) : 4).filter((w, j) => !(j === 0 && /^(each|the|a|an|this|these|in)$/i.test(w))).join(' ');
+      const first = subj ? subj[0].toUpperCase() + subj.slice(1) : ws.slice(0, 4).join(' ');
+      const vi = starts >= 0 ? starts : mentions >= 0 ? mentions : visual.kind === 'process' && !DEMO_VISUALS[iloLine[1]] && i < visual.items.length ? i : -1;
+      const named = DEMO_LABELS[pt.text.toLowerCase().split(/\s+/).slice(0, 4).join(' ').replace(/,$/, '')];
+      return { ...pt, label: named ?? (starts >= 0 ? visual.items[starts].label : first), visual_item: vi };
+    });
+    points.splice(0, points.length, ...labelled);
     const keyOf = (q: string) => {
       const ws = q.split(/\s+/);
       const k = ws.reduce((best, w, j) => (w.replace(/\W/g, '').length > ws[best].replace(/\W/g, '').length ? j : best), 0);
@@ -118,10 +137,21 @@ export function mockRespond(call: JsonCall): unknown {
         questions.push({ ...base, type: 'cloze', prompt: cloze, answer: key, accepted_answers: [key.toLowerCase()] });
       }
     });
-    if (points.length >= 3) {
-      questions.push({ ...blank, type: 'order', prompt: 'Put these statements in the order they were taught.', steps: points.slice(0, 4).map((x) => x.text.split(' ').slice(0, 9).join(' ') + '…'),
-        answer: '', explanation: 'This is the order on the slides.', source_quote: points[0].quote, point_index: 0, passage_id: points[0].passage_id });
-    }
+    // link-back questions: after each step, connect it to the step before (or order the steps so far)
+    const short = (x: { text: string }) => x.text.split(' ').slice(0, 9).join(' ') + '…';
+    points.forEach((pt, k) => {
+      if (k === 0) return;
+      const prev = points[k - 1];
+      const base = { ...blank, source_quote: pt.quote, point_index: k, passage_id: pt.passage_id, link_points: [`S${k - 1}`] };
+      if (k >= 2 && k % 2 === 0 && new Set(points.slice(0, k + 1).map(short)).size === k + 1 && k + 1 <= 7) {
+        questions.push({ ...base, type: 'order', prompt: `Link back: put the steps up to "${pt.label}" in the order they were taught.`, steps: points.slice(0, k + 1).map(short),
+          answer: '', explanation: 'Each step builds on the one before it.' });
+      } else {
+        questions.push({ ...base, type: 'short', prompt: `Link back: how does "${prev.label}" connect to "${pt.label}"?`, answer: prev.text + ' ' + pt.text,
+          rubric: [{ point: `Recalls ${prev.label}`, marks: 1 }, { point: `Explains how it leads to or relates to ${pt.label}`, marks: 1 }],
+          explanation: `Step ${k} (${prev.label}) and step ${k + 1} (${pt.label}) are linked: ${prev.text} ${pt.text}` });
+      }
+    });
     const mine = new Set(points.map((x) => x.text));
     const earlier = [...u.matchAll(/^(E\d+): (.*) \((this lecture|Lecture \d+)[^)]*\)$/gm)].filter((m) => !mine.has(m[2]));
     if (earlier.length && points.length) {
@@ -133,12 +163,9 @@ export function mockRespond(call: JsonCall): unknown {
         answer: e[2] + ' ' + points[0].text, rubric: [{ point: 'Recalls the earlier idea correctly', marks: 1 }, { point: 'Explains how it connects to this section', marks: 1 }],
         explanation: 'Linking ideas across sections and lectures is the basis of essay answers.', source_quote: points[0].quote, point_index: -1, link_points: [e[1]], passage_id: points[0].passage_id });
     }
-    const visual = (iloLine[1] && DEMO_VISUALS[iloLine[1]]) || {
-      kind: 'process', title: 'Key ideas', columns: [], items: points.slice(0, 4).map((x, i) => ({ label: `${i + 1}`, detail: x.text.split(' ').slice(0, 8).join(' ') + '…' })),
-    };
     const title = (iloLine[2] ?? 'Lesson section').replace(/^(Describe|Explain|Interpret|Compare|Outline)\s+/i, '').replace(/^./, (c) => c.toUpperCase()).slice(0, 100);
     return {
-      title, intro: `What to take from this part of the lecture, in ${points.length} points. Then a question on every point.`, points, visual, questions,
+      title, intro: `This part of the lecture in ${points.length} small steps. After each one you answer a question on it, then one linking it back to the step before.`, points, visual, questions,
     };
   }
   if (call.purpose.startsWith('tutor')) {

@@ -1,4 +1,6 @@
 import { useState } from 'preact/hooks';
+import { fmtMin } from '../learn/progress';
+import { timeText } from './LectureList';
 import { DemoCard } from './Demo';
 import { byModule, db, ensureModules, notifyChange } from '../db';
 import type { Module } from '../types';
@@ -127,7 +129,7 @@ function ModuleCard({ c }: { c: CardInfo }) {
         {c.lectures.length > 0 && (
           <div class="mini-rings" aria-label="Lecture progress">
             {c.lectures.filter((r) => r.lecture.iloIds.length).map((r) => (
-              <button key={r.lecture.id} class={'mr' + (nl?.lecture.id === r.lecture.id ? ' now' : '')} title={`${r.lecture.title}: ${Math.round(r.st.frac * 100)}%`} onClick={() => go(`/m/${c.m.id}/l/${r.lecture.id}`)}>
+              <button key={r.lecture.id} class={'mr' + (nl?.lecture.id === r.lecture.id ? ' now' : '')} title={`${r.lecture.title}: ${Math.round(r.st.frac * 100)}% · ${timeText(r)}`} onClick={() => go(`/m/${c.m.id}/l/${r.lecture.id}`)}>
                 <Ring value={r.st.frac} size={34} stroke={4} label={r.lecture.number ? String(r.lecture.number) : '•'} />
               </button>
             ))}
@@ -136,7 +138,7 @@ function ModuleCard({ c }: { c: CardInfo }) {
       </>
     );
     action = nl
-      ? { label: `▶  ${nl.st.started ? 'Continue' : 'Start'} L${nl.lecture.number} · ${nl.lecture.title}`, path: `/m/${c.m.id}/l/${nl.lecture.id}` }
+      ? { label: `▶  ${nl.st.started ? 'Continue' : 'Start'} L${nl.lecture.number} · ${nl.lecture.title} · ≈${fmtMin(nl.st.started ? nl.mins.left : nl.mins.total)}`, path: `/m/${c.m.id}/l/${nl.lecture.id}` }
       : { label: recapDue ? `🔁 Recap (${recapDue} due)` : '🔀 Mixed review', path: `/m/${c.m.id}/study` };
   }
   return (

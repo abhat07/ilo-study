@@ -217,6 +217,8 @@ export interface LearnPoint {
   text: string;
   quote: string; // verbatim from the passage
   chunkId: string;
+  label?: string; // 1-4 word step heading, e.g. "Denaturation"
+  visualItem?: number; // which item of the section's diagram this step is (-1/undefined: none)
 }
 
 export interface Visual {
@@ -240,7 +242,9 @@ export interface LearnSection {
   visual: Visual;
   chunkIds: string[];
   itemIds: string[];
-  seenAt?: number;
+  seenAt?: number; // every step read
+  readTo?: number; // steps read so far (step-by-step lessons)
+  v?: number; // 2 = step-by-step format with link-back questions
   updatedAt: number;
 }
 
