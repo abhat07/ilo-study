@@ -154,6 +154,8 @@ Your answers are never deleted.
 | Adaptive difficulty: level 1 recall → 2 explain → 3 apply to a new scenario (transfer), chosen from the ILO's mastery | `engine/generate.ts` (`levelFor`) |
 | Dual coding (partial): drag-to-order for processes, source slide shown next to the answer. No learning-style matching | `ui/answers.tsx` |
 
+**Study helper (💬 Ask).** A floating chat bubble on the question screen, running on the cheapest model (Haiku, about 0.03p per message). It sees only the current question, its ILO and the slide the question came from, and labels anything else as "beyond course materials". Before you answer, it gives hints but never the answer. Using it before answering marks that answer as *hinted*: a hinted answer counts half towards mastery, and a correct hinted answer is scheduled sooner (graded Hard), so retrieval practice stays honest. After you answer, it explains freely. Each question starts a fresh conversation.
+
 Sessions aim for **15 minutes or 24 questions**, then show a summary: answered, % correct, mastery changes per
 ILO, over- and under-confidence, and the next review due.
 

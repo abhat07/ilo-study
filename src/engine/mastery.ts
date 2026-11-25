@@ -4,7 +4,7 @@
  * Evidence, strongest first:
  *  - first attempts at questions the student has never seen (weight 1.0; transfer questions 1.5)
  *  - repeats of seen questions count only a little (weight 0.2): repetition is not mastery
- *  - self-marked answers count at 70% of their weight
+ *  - self-marked answers count at 70% of their weight; answers given after using the help chat count half
  *  - disputed marks are left out
  * Then:
  *  - time since last success, using the forgetting curve (FSRS stability of the ILO's items)
@@ -44,6 +44,7 @@ export function estimateMastery(attempts: Attempt[], items: Map<string, Item>, n
   for (const at of graded) {
     let w = at.firstExposure ? (at.transfer ? 1.5 : 1) : 0.2;
     if (at.mark.by === 'self') w *= 0.7;
+    if (at.hinted) w *= 0.5; // answered with help from the chat
     a += w * at.score;
     b += w * (1 - at.score);
     if (at.firstExposure) {

@@ -14,6 +14,7 @@ import { ClozeInput, McqInput, OrderInput, ShortInput, initialOrder, seededOrder
 import { SourceView } from './SourceView';
 import { syncNow } from '../sync/sync';
 import { Doodles, FootArt } from './Doodles';
+import { HelpChat } from './HelpChat';
 import { where } from './common';
 import { confetti, praise, toast } from './fun';
 import { achievements, loadGame, xpForAttempt, type GameState } from '../engine/game';
@@ -60,6 +61,7 @@ export function Session({ moduleId }: { moduleId: string }) {
     if (msgs.length) confetti(window.innerWidth / 2, 120, 90);
   };
   const shownAt = useRef(Date.now());
+  const hintedRef = useRef(false);
 
   // Colour by learning stage (see styles.css and README): calm while retrieving, outcome-coloured feedback, gold reward.
   useEffect(() => {
@@ -86,6 +88,7 @@ export function Session({ moduleId }: { moduleId: string }) {
     setMarkNote('');
     setTicks(it.rubric.map(() => false));
     shownAt.current = Date.now();
+    hintedRef.current = false;
     setPhase('answer');
     window.scrollTo(0, 0);
   };
@@ -130,7 +133,7 @@ export function Session({ moduleId }: { moduleId: string }) {
 
   const finishAttempt = async (resp: string, conf: Confidence, m: MarkDetail) => {
     const ctx = ctxRef.current!;
-    const a = await recordAttempt(ctx, item!, resp, conf, m, Date.now() - shownAt.current);
+    const a = await recordAttempt(ctx, item!, resp, conf, m, Date.now() - shownAt.current, hintedRef.current);
     setAttempt(a);
     setMark(m);
     setPhase('feedback');
@@ -270,6 +273,16 @@ export function Session({ moduleId }: { moduleId: string }) {
           </div>
         )}
         {item && phase !== 'loading' && <FootArt rotate={answered} />}
+        {item && phase !== 'loading' && phase !== 'empty' && (
+          <HelpChat
+            item={item}
+            ilo={ilos.get(item.iloIds[0])}
+            answered={phase === 'feedback'}
+            studentAnswer={attempt?.response ?? ''}
+            correctAnswer={item.type === 'mcq' ? item.options[item.correctIndex] : item.type === 'order' ? item.steps.join(' → ') : item.answer}
+            onUsedBeforeAnswer={() => { hintedRef.current = true; }}
+          />
+        )}
       </div>
     </div>
   );
@@ -337,6 +350,7 @@ function Feedback(props: { item: Item; mark: MarkDetail; attempt: Attempt; order
   return (
     <div class="stack">
       <div class={'verdict ' + v.cls}><span class="big-emoji">{v.emoji}</span>{v.txt}<span class="xp-chip">+{xp.total} XP</span></div>
+      {attempt.hinted && <div class="small muted">💬 You used the helper before answering, so this counts as half evidence and comes back a little sooner.</div>}
       <div class="xp-parts">{xp.parts.map((p) => `${p.label} +${p.xp}`).join(' · ')}</div>
 
       {attempt.confidence >= 3 && mark.score < 0.5 && (

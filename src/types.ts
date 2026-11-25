@@ -138,6 +138,8 @@ export interface Attempt {
   disputed?: boolean;
   /** self-explanation prompt answered after the main question; logged, not used for mastery */
   elaboration?: boolean;
+  /** the help chat was used before answering: counts as weaker evidence and a shorter review interval */
+  hinted?: boolean;
 }
 
 export interface Dispute {

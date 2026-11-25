@@ -266,3 +266,22 @@ describe('game layer', () => {
     expect(g.xp).toBeGreaterThan(0);
   });
 });
+
+describe('help chat hints', () => {
+  it('a correct answer after a hint is scheduled sooner', () => {
+    expect(gradeFor(1, 4, true)).toBe(Rating.Hard);
+    expect(gradeFor(0, 4, true)).toBe(Rating.Again);
+  });
+  it('hinted answers count as half evidence', () => {
+    const clean = Array.from({ length: 4 }, () => att({}));
+    const hinted = Array.from({ length: 4 }, () => att({ hinted: true }));
+    expect(estimateMastery(hinted, new Map()).value).toBeLessThan(estimateMastery(clean, new Map()).value);
+  });
+  it('the prompt tells the helper not to reveal answers before the student has answered', async () => {
+    const { tutorUser, TUTOR_SYSTEM } = await import('../src/ai/prompts');
+    const before = tutorUser({ ilo: 'x', passage: 'p', where: 'w', question: 'q', options: [], answered: false, studentAnswer: '', correctAnswer: 'SECRET', history: [], message: 'what is it?' });
+    expect(before).not.toContain('SECRET');
+    expect(before).toContain('NOT answered');
+    expect(TUTOR_SYSTEM).toMatch(/never state/i);
+  });
+});

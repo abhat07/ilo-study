@@ -12,15 +12,16 @@ export function newCard(now = new Date()): Card {
  * Turn an answer into an FSRS grade. Confidence matters: a correct guess is a weak
  * memory, so it is scheduled sooner than a confident correct answer.
  */
-export function gradeFor(score: number, confidence: Confidence): Grade {
+export function gradeFor(score: number, confidence: Confidence, hinted = false): Grade {
   if (score < 0.5) return Rating.Again;
+  if (hinted) return Rating.Hard; // got there with help: review sooner
   if (score < 0.99 || confidence <= 2) return Rating.Hard;
   if (confidence === 4) return Rating.Easy;
   return Rating.Good;
 }
 
-export function review(card: Card, score: number, confidence: Confidence, now = new Date()): Card {
-  return f.next(reviveCard(card), now, gradeFor(score, confidence)).card;
+export function review(card: Card, score: number, confidence: Confidence, now = new Date(), hinted = false): Card {
+  return f.next(reviveCard(card), now, gradeFor(score, confidence, hinted)).card;
 }
 
 export function retrievability(card: Card, now = new Date()): number {
@@ -51,10 +52,10 @@ const replayer = new FSRS({ request_retention: 0.9, enable_fuzz: false, maximum_
  * Rebuild a question's FSRS card from its answer history (used when two devices both answered it).
  * No fuzz, so every device computes exactly the same schedule.
  */
-export function replayCard(history: { at: number; score: number; confidence: Confidence }[], createdAt: number): Card {
+export function replayCard(history: { at: number; score: number; confidence: Confidence; hinted?: boolean }[], createdAt: number): Card {
   let card = createEmptyCard(new Date(createdAt));
   for (const h of [...history].sort((a, b) => a.at - b.at)) {
-    card = replayer.next(card, new Date(h.at), gradeFor(h.score, h.confidence)).card;
+    card = replayer.next(card, new Date(h.at), gradeFor(h.score, h.confidence, !!h.hinted)).card;
   }
   return card;
 }

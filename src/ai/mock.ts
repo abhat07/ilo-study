@@ -74,6 +74,15 @@ export function mockRespond(call: JsonCall): unknown {
       feedback: 'This is a mock mark used for testing the app without an API key.',
     } satisfies MarkOut;
   }
+  if (call.purpose.startsWith('tutor')) {
+    const answered = u.includes('STATUS: the student has answered');
+    return {
+      reply: answered
+        ? 'Mock helper: compare your answer with the highlighted quote, which states the key point directly.'
+        : 'Mock helper: think about what the slide says happens at this step. Have a go first, then ask me again.',
+      beyond_materials: '',
+    };
+  }
   if (call.purpose.startsWith('explain')) {
     return { explanation: 'Mock explanation: re-read the highlighted passage.', beyond_materials: '' } satisfies ExplainOut;
   }

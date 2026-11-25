@@ -147,6 +147,7 @@ export async function recordAttempt(
   confidence: Confidence,
   mark: MarkDetail,
   durationMs: number,
+  hinted = false,
 ): Promise<Attempt> {
   const d = await db();
   const attempt: Attempt = {
@@ -164,9 +165,10 @@ export async function recordAttempt(
     level: it.level,
     durationMs,
     mark,
+    ...(hinted ? { hinted: true } : {}),
   };
   const fresh = (await d.get('items', it.id)) ?? it;
-  const updated: Item = { ...fresh, card: review(fresh.card, mark.score, confidence), seenCount: fresh.seenCount + 1 };
+  const updated: Item = { ...fresh, card: review(fresh.card, mark.score, confidence, new Date(), hinted), seenCount: fresh.seenCount + 1 };
   const tx = d.transaction(['attempts', 'items', 'sessions'], 'readwrite');
   await tx.objectStore('attempts').put(attempt);
   await tx.objectStore('items').put(updated);
