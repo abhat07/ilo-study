@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { GitHubRemote } from '../sync/remote';
 import { syncNow, syncSettings } from '../sync/sync';
 import { useSync } from './common';
+import { isDemo } from '../mode';
 
 /** Pre-filled fine-grained token form (GitHub ignores any parameter it doesn't support). */
 const TOKEN_URL =
@@ -35,6 +36,15 @@ export function SyncCard() {
       setBusy(false);
     }
   };
+
+  if (isDemo()) {
+    return (
+      <div class="card">
+        <h2>🔄 Sync across devices</h2>
+        <p class="small muted">Off in demo mode: demo data stays on this device and never touches your synced copy.</p>
+      </div>
+    );
+  }
 
   if (connected) {
     const last = status.last

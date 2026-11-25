@@ -15,6 +15,8 @@ import { topUpPool } from './engine/generate';
 import { mapModule, scrubRemovedFiles } from './ingest/pipeline';
 import { applyTheme } from './settings';
 import { startAutoSync } from './sync/sync';
+import { DemoBanner, DemoGate } from './ui/Demo';
+import { isDemo } from './mode';
 
 applyTheme();
 void scrubRemovedFiles().finally(startAutoSync);
@@ -39,6 +41,7 @@ function setTimeOfDay(): void {
 setTimeOfDay();
 setInterval(setTimeOfDay, 5 * 60_000);
 document.body.dataset.stage = 'home';
+if (isDemo()) document.body.classList.add('demo');
 // Ask the browser not to evict our data under storage pressure.
 navigator.storage?.persist?.();
 
@@ -52,7 +55,7 @@ function useRoute(): string {
   return r;
 }
 
-function App() {
+function Screen() {
   const route = useRoute();
   useEffect(() => {
     // Warm the question pool for every confirmed module so a session can start instantly.
@@ -78,6 +81,17 @@ function App() {
     return <ModulePage key={id} moduleId={id} />;
   }
   return <Home />;
+}
+
+function App() {
+  return (
+    <>
+      <DemoBanner />
+      <DemoGate>
+        <Screen />
+      </DemoGate>
+    </>
+  );
 }
 
 render(<App />, document.getElementById('app')!);

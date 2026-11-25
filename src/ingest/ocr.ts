@@ -3,6 +3,7 @@
  * data are downloaded once (from jsDelivr) and cached by the service worker.
  */
 import type { Worker } from 'tesseract.js';
+import { isDemo } from '../mode';
 
 let workerP: Promise<Worker> | null = null;
 
@@ -14,6 +15,7 @@ async function worker(): Promise<Worker> {
 }
 
 export async function ocrImage(img: Blob | HTMLCanvasElement): Promise<string> {
+  if (isDemo()) return '';
   try {
     const w = await worker();
     const { data } = await w.recognize(img);

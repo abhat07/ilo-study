@@ -5,6 +5,7 @@ import { MODELS, USD_TO_GBP } from '../ai/pricing';
 import { exportBackup, importBackup } from '../backup';
 import { THEMES, settings, type ThemeName } from '../settings';
 import { SyncCard } from './SyncCard';
+import { DemoCard } from './Demo';
 import { TopBar, useAi, useLive } from './common';
 import { Doodles } from './Doodles';
 import { DataNotice, KeyAndCap } from './Setup';
@@ -87,6 +88,7 @@ export function Settings() {
       <TopBar title="Settings" back="/" />
       <div class="wrap">
         <SyncCard />
+        <DemoCard />
         <LookCard />
         <NameCard />
         <KeyAndCap />

@@ -1,3 +1,4 @@
+import { isDemo } from './mode';
 /**
  * Small device-only settings. Kept in localStorage so they can be read synchronously.
  * The API key is NEVER included in exports and never leaves the device except in the
@@ -55,7 +56,7 @@ export const settings = {
   },
   /** Development only: answers come from a local fake model so the app can be tested without an API key. */
   mock(): boolean {
-    return import.meta.env.DEV && localStorage.getItem(K.mock) === '1';
+    return isDemo() || (import.meta.env.DEV && localStorage.getItem(K.mock) === '1');
   },
   /** Settings that are safe to include in a backup file (no API key). */
   exportable(): Record<string, string | null> {

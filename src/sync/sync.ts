@@ -10,6 +10,7 @@
  * The token lives only in this browser's storage and is never included in backups or the synced copy.
  */
 import { db, notifyChange, onDataChange } from '../db';
+import { isDemo } from '../mode';
 import type { SlideImage, SourceFile } from '../types';
 import { ConflictError, GitHubRemote, RemoteAuthError, type Remote } from './remote';
 import { canonical, emptySnapshot, mergeSnapshots, type Snapshot } from './merge';
@@ -22,7 +23,7 @@ const K = { repo: 'ilo.syncRepo', token: 'ilo.syncToken', last: 'ilo.syncLast', 
 export const syncSettings = {
   repo: () => localStorage.getItem(K.repo) ?? '',
   token: () => localStorage.getItem(K.token) ?? '',
-  configured: () => !!(localStorage.getItem(K.repo) && localStorage.getItem(K.token)),
+  configured: () => !isDemo() && !!(localStorage.getItem(K.repo) && localStorage.getItem(K.token)),
   save(repo: string, token: string) {
     localStorage.setItem(K.repo, repo.trim().replace(/^https:\/\/github\.com\//, '').replace(/\/$/, ''));
     localStorage.setItem(K.token, token.trim());

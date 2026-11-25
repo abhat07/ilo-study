@@ -682,3 +682,14 @@ select { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); 
 .slide-thumb.big .pic-grid img { max-height: 70vh; }
 .pic-count { position: absolute; right: 6px; bottom: 6px; font-size: 0.7rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: rgba(0, 0, 0, 0.62); color: #fff; }
 .slide-pics .slide-img { height: auto; }
+
+/* demo mode */
+.demo-banner { position: sticky; top: 0; z-index: 60; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between;
+  padding: 7px 14px; font-size: 0.8rem; color: #1a1205; background: repeating-linear-gradient(135deg, #f2c14e 0 14px, #f5cd68 14px 28px); }
+.demo-banner .demo-actions { display: flex; gap: 6px; }
+.demo-banner .btn { color: #1a1205; border-color: rgba(26, 18, 5, 0.35); background: rgba(255, 255, 255, 0.55); }
+.demo-banner .btn.ghost { background: transparent; }
+.demo-link { display: block; width: 100%; text-align: left; margin-top: 14px; padding: 12px 14px; border-radius: 14px; font: inherit; font-size: 0.85rem;
+  color: var(--text); background: var(--card-2); border: 1px dashed var(--line); cursor: pointer; }
+.demo-link:hover { border-color: rgba(var(--brand-rgb), 0.6); }
+.demo-seed { padding-top: 40px; }

@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { DemoCard } from './Demo';
 import { byModule, db, ensureModules, notifyChange } from '../db';
 import type { Module } from '../types';
 import { isDue } from '../engine/scheduler';
@@ -93,6 +94,7 @@ export function Home() {
         )}
         {stats && <Quests g={stats} />}
         {stats && <BadgeShelf g={stats} />}
+        <DemoCard compact />
       </div>
       </div>
     </>

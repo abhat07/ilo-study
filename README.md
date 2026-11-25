@@ -142,6 +142,24 @@ Your answers are never deleted.
 
 ---
 
+## Demo mode
+
+**Settings → 🧪 Demo mode** (or "Try the demo" at the bottom of the home screen) lets you try every feature
+without real material or an API key:
+
+* **Sample module** with three short lectures written for the demo: *PCR* (a PDF plus a lecture transcript),
+  *Restriction cloning* and *Agarose gel electrophoresis* (PowerPoints with drawn slide pictures: an EcoRI cut
+  site, a plasmid map and two gels). They're made on the device and go through the normal upload pipeline:
+  reading, ILO confirmation, slide matching and lecture grouping. OCR is skipped in the demo.
+* **Fake AI, free.** Lessons, questions, marking, "Explain this more" and the study helper come from a
+  deterministic stand-in (`src/ai/mock.ts`). Lesson points are the slides' own sentences and the diagrams are
+  hand-written for the seven demo ILOs. Every question type appears: fill-the-gap, multiple choice, short answer
+  (marked by key words from the model answer), put-in-order, and link questions within and across lectures. The
+  pretend spend still counts towards the cap shown, so the cap can be seen working.
+* **Separate sandbox.** Demo data lives in its own database (`ilo-study-demo`). Your real modules, answers,
+  XP and streak are untouched, and sync is off. A striped banner stays at the top. **Reset** clears only the
+  sandbox and rebuilds it; **Exit demo** returns to your real data.
+
 ## Lectures and lessons
 
 Each module is split into **lectures** (`src/learn/lectures.ts`). The split is automatic and free:
@@ -278,7 +296,9 @@ src/
     client.ts           only path to the API: cap check, call, spend log, error mapping
     pricing.ts          model routing + price table + GBP conversion
     prompts.ts          system prompts and JSON schemas (structured outputs)
-    mock.ts             DEV-ONLY fake model
+    mock.ts             fake model for demo mode (and `npm run dev` with ilo.mock=1)
+  mode.ts               demo mode flag (separate database, fake AI, no sync)
+  demo/                 demo content and on-device sample files (PDF, VTT, PPTX with pictures)
   ingest/
     extract.ts          PDF (pdf.js), PPTX/DOCX (JSZip + XML), VTT/SRT/TXT → passages
     slideImages.ts      PowerPoint slide pictures: logo/template filter, shrink to JPEG, store per slide

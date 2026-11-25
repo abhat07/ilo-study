@@ -1,4 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import { DB_NAME, isDemo } from './mode';
+import { DEMO_MODULE } from './demo/content';
 import type {
   Attempt, Chunk, Dispute, GenLog, Ilo, IngestEvent, Item, LearnSection, Lecture, Module, SessionRecord, SlideImage, SourceFile, SpendRecord,
 } from './types';
@@ -33,7 +35,7 @@ let dbp: Promise<IDBPDatabase<StudyDB>> | null = null;
 
 export function db(): Promise<IDBPDatabase<StudyDB>> {
   if (!dbp) {
-    dbp = openDB<StudyDB>('ilo-study', 3, {
+    dbp = openDB<StudyDB>(DB_NAME(), 3, {
       // another window still has the old version open: reload it so the upgrade can proceed
       blocking() {
         if (typeof location !== 'undefined') location.reload();
@@ -123,7 +125,7 @@ export async function ensureModules(): Promise<Module[]> {
   const existing = await d.getAll('modules');
   if (existing.length === 0) {
     const t = Date.now();
-    for (const [i, m] of DEFAULT_MODULES.entries()) {
+    for (const [i, m] of (isDemo() ? [DEMO_MODULE] : DEFAULT_MODULES).entries()) {
       await d.put('modules', { ...m, createdAt: t + i, updatedAt: t + i, iloStatus: 'none' });
     }
     queueMicrotask(notifyChange);
@@ -140,6 +142,16 @@ export function onDataChange(fn: () => void): () => void {
 }
 export function notifyChange(): void {
   for (const fn of listeners) fn();
+}
+
+/** Close and delete the demo sandbox (only ever the demo database). */
+export async function deleteDemoDb(): Promise<void> {
+  if (dbp) (await dbp).close();
+  dbp = null;
+  await new Promise<void>((res) => {
+    const r = indexedDB.deleteDatabase('ilo-study-demo');
+    r.onsuccess = r.onerror = r.onblocked = () => res();
+  });
 }
 
 /** Tests only: forget the open connection so a fresh IndexedDB (another "device") can be used. */

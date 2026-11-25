@@ -1,9 +1,10 @@
 /**
- * DEVELOPMENT ONLY. A deterministic stand-in for the model so the whole flow can be
- * exercised without an API key. Enabled with localStorage['ilo.mock']='1' in `npm run dev`.
- * Production builds never use it (settings.mock() checks import.meta.env.DEV).
+ * A deterministic stand-in for the model, so every feature can be tried without an API key or cost.
+ * Used in demo mode (a separate sandbox database; see src/mode.ts) and, in `npm run dev`, with
+ * localStorage['ilo.mock']='1'. Never used for real material outside those.
  */
 import type { JsonCall } from './client';
+import { DEMO_VISUALS } from '../demo/content';
 import type { GenItemOut, GenOut, MapOut, MarkOut, ExplainOut, IloOut } from './prompts';
 
 const words = (s: string) => s.toLowerCase().match(/[a-z0-9']{4,}/g) ?? [];
@@ -64,60 +65,95 @@ export function mockRespond(call: JsonCall): unknown {
     return { supports_ilo: true, reason: '', items } satisfies GenOut;
   }
   if (call.purpose.startsWith('mark')) {
+    // Marks by how many key words of the model answer the student used (a stand-in, not a judgement).
     const ans = (u.match(/<answer>\n([\s\S]*?)\n<\/answer>/) ?? [])[1] ?? '';
+    const model = (u.match(/MODEL ANSWER: (.*)/) ?? [])[1] ?? '';
     const rubricBlock = (u.match(/RUBRIC:\n([\s\S]*?)\n\n/) ?? [])[1] ?? '';
     const rubric = [...rubricBlock.matchAll(/^\d+\. (.*)$/gm)].map((m) => m[1]);
+    const mw = new Set(words(model).filter((w) => w.length >= 5));
+    const hit = [...new Set(words(ans))].filter((w) => mw.has(w)).length;
     return {
-      points: rubric.map((p, i) => ({ point: p, awarded: ans.length > 20 * (i + 1), reasoning: '(mock marking by answer length)' })),
-      overall_reasoning: 'Mock marker: awards points by answer length. Not a real judgement.',
+      points: rubric.map((pt, i) => ({ point: pt, awarded: hit >= 2 + 2 * i, reasoning: `(demo marker: ${hit} key words from the model answer)` })),
+      overall_reasoning: 'Demo marker: counts key words from the model answer. The real marker judges meaning against the rubric.',
       confidence: 'low',
-      feedback: 'This is a mock mark used for testing the app without an API key.',
+      feedback: hit >= 2 ? 'Good: you used the key terms. Check the model answer for anything you left out.' : 'Use the key terms from the slide: compare your answer with the model answer below.',
     } satisfies MarkOut;
   }
   if (call.purpose.startsWith('lesson')) {
-    // Dev-only fake lesson: points are the passages' own sentences, so quotes are verbatim.
+    // Fake lesson: points are the passages' own sentences (so quotes are verbatim); every question type is used.
+    const iloLine = (u.match(/^ILO ([A-Z]+-\d+): (.*)$/m) ?? []) as string[];
     const passages = [...u.matchAll(/<passage id="([^"]+)" where="[^"]*">\n([\s\S]*?)\n<\/passage>/g)];
     const points: { text: string; quote: string; passage_id: string }[] = [];
+    const seenP = new Set<string>();
     for (const [, pid, text] of passages) {
-      for (const s of text.split(/(?<=[.!?])\s+|\n+/).map((x) => x.trim()).filter((x) => x.split(/\s+/).length >= 8)) {
-        if (points.length < 6) points.push({ text: s, quote: s, passage_id: pid });
+      for (const sen of text.split(/(?<=[.!?])\s+|\n+/).map((x) => x.replace(/^Speaker notes:\s*/, '').trim()).filter((x) => x.split(/\s+/).length >= 8 && !/^\d+\./.test(x) && /[.!?]$/.test(x))) {
+        const k = sen.toLowerCase();
+        if (points.length < 6 && !seenP.has(k)) { seenP.add(k); points.push({ text: sen, quote: sen, passage_id: pid }); }
       }
     }
-    const questions = points.map((p, i) => {
-      const ws = p.quote.split(/\s+/);
-      const k = ws.reduce((b, w, j) => (w.replace(/\W/g, '').length > ws[b].replace(/\W/g, '').length ? j : b), 0);
-      const key = ws[k].replace(/[^\w-]/g, '');
-      return {
-        type: 'cloze' as const, transfer: false, prompt: ws.map((w, j) => (j === k ? '____' : w)).join(' '), options: [], correct_index: 0,
-        option_explanations: [], answer: key, accepted_answers: [], steps: [], explanation: p.text, rubric: [], elaboration_prompt: '',
-        elaboration_answer: '', source_quote: p.quote, beyond_materials: '', point_index: i, link_points: [] as string[], passage_id: p.passage_id,
-      };
+    const keyOf = (q: string) => {
+      const ws = q.split(/\s+/);
+      const k = ws.reduce((best, w, j) => (w.replace(/\W/g, '').length > ws[best].replace(/\W/g, '').length ? j : best), 0);
+      return { ws, k, key: ws[k].replace(/[^\w-]/g, '') };
+    };
+    const pool = [...new Set(points.flatMap((pt) => pt.text.split(/\s+/).map((w) => w.replace(/[^\w-]/g, '')).filter((w) => w.length >= 7)))];
+    const blank = { transfer: false, options: [] as string[], correct_index: 0, option_explanations: [] as string[], accepted_answers: [] as string[], steps: [] as string[],
+      rubric: [] as { point: string; marks: number }[], elaboration_prompt: '', elaboration_answer: '', beyond_materials: '', link_points: [] as string[] };
+    const questions: any[] = [];
+    points.forEach((pt, i) => {
+      const { ws, k, key } = keyOf(pt.quote);
+      const cloze = ws.map((w, j) => (j === k ? w.replace(key, '____') : w)).join(' ');
+      const base = { ...blank, source_quote: pt.quote, point_index: i, passage_id: pt.passage_id, explanation: pt.text };
+      const others = pool.filter((w) => w.toLowerCase() !== key.toLowerCase()).slice(i, i + 3);
+      if (i % 3 === 1 && others.length === 3) {
+        const at = i % 4;
+        const opts = [...others];
+        opts.splice(at, 0, key);
+        questions.push({ ...base, type: 'mcq', prompt: `Which word completes this statement from the lecture? "${cloze}"`, options: opts, correct_index: at,
+          option_explanations: opts.map((o) => (o === key ? `Correct: the slide says "${pt.quote}"` : `"${o}" is a term from this section, but not the one used here.`)), answer: key });
+      } else if (i % 3 === 2) {
+        questions.push({ ...base, type: 'short', prompt: `Explain this point from the lecture in your own words: "${pt.text.split(' ').slice(0, 8).join(' ')}…"`, answer: pt.text,
+          rubric: [{ point: `Uses the key term "${key}"`, marks: 1 }, { point: 'States the cause or mechanism given on the slide', marks: 1 }] });
+      } else {
+        questions.push({ ...base, type: 'cloze', prompt: cloze, answer: key, accepted_answers: [key.toLowerCase()] });
+      }
     });
-    if (points.length >= 2) {
-      questions.push({
-        type: 'short' as any, transfer: false, prompt: 'Explain how the first and last ideas in this section are connected.', options: [], correct_index: 0,
-        option_explanations: [], answer: points[0].text + ' ' + points[points.length - 1].text, accepted_answers: [], steps: [], explanation: 'Mock link question.',
-        rubric: [{ point: 'States the first idea', marks: 1 }, { point: 'Connects it to the last idea', marks: 1 }] as any, elaboration_prompt: '', elaboration_answer: '',
-        source_quote: points[0].quote, beyond_materials: '', point_index: -1, link_points: ['E1'], passage_id: points[0].passage_id,
-      });
+    if (points.length >= 3) {
+      questions.push({ ...blank, type: 'order', prompt: 'Put these statements in the order they were taught.', steps: points.slice(0, 4).map((x) => x.text.split(' ').slice(0, 9).join(' ') + '…'),
+        answer: '', explanation: 'This is the order on the slides.', source_quote: points[0].quote, point_index: 0, passage_id: points[0].passage_id });
     }
+    const mine = new Set(points.map((x) => x.text));
+    const earlier = [...u.matchAll(/^(E\d+): (.*) \((this lecture|Lecture \d+)[^)]*\)$/gm)].filter((m) => !mine.has(m[2]));
+    if (earlier.length && points.length) {
+      // the earlier point sharing most words with this section (ties: this lecture first)
+      const here = new Set(words(points.map((x) => x.text).join(' ')).filter((w) => w.length >= 5));
+      const score = (m: RegExpMatchArray) => words(m[2]).filter((w) => here.has(w)).length + (m[3] === 'this lecture' ? 0.5 : 0);
+      const e = earlier.reduce((best, m) => (score(m) > score(best) ? m : best), earlier[0]);
+      questions.push({ ...blank, type: 'short', prompt: `Link it up: how does "${e[2].split(' ').slice(0, 10).join(' ')}…" (${e[3]}) connect to "${points[0].text.split(' ').slice(0, 10).join(' ')}…"?`,
+        answer: e[2] + ' ' + points[0].text, rubric: [{ point: 'Recalls the earlier idea correctly', marks: 1 }, { point: 'Explains how it connects to this section', marks: 1 }],
+        explanation: 'Linking ideas across sections and lectures is the basis of essay answers.', source_quote: points[0].quote, point_index: -1, link_points: [e[1]], passage_id: points[0].passage_id });
+    }
+    const visual = (iloLine[1] && DEMO_VISUALS[iloLine[1]]) || {
+      kind: 'process', title: 'Key ideas', columns: [], items: points.slice(0, 4).map((x, i) => ({ label: `${i + 1}`, detail: x.text.split(' ').slice(0, 8).join(' ') + '…' })),
+    };
+    const title = (iloLine[2] ?? 'Lesson section').replace(/^(Describe|Explain|Interpret|Compare|Outline)\s+/i, '').replace(/^./, (c) => c.toUpperCase()).slice(0, 100);
     return {
-      title: 'Mock lesson section', intro: 'Mock intro written from the slides for testing.', points,
-      visual: { kind: 'process', title: 'Key steps', columns: [], items: points.slice(0, 4).map((p, i) => ({ label: `Step ${i + 1}`, detail: p.text.split(' ').slice(0, 10).join(' ') })) },
-      questions,
+      title, intro: `What to take from this part of the lecture, in ${points.length} points. Then a question on every point.`, points, visual, questions,
     };
   }
   if (call.purpose.startsWith('tutor')) {
     const answered = u.includes('STATUS: the student has answered');
+    const passage = ((u.match(/<passage>\n([\s\S]*?)\n<\/passage>/) ?? [])[1] ?? '').split(/(?<=[.!?])\s+/)[0] ?? '';
     return {
       reply: answered
-        ? 'Mock helper: compare your answer with the highlighted quote, which states the key point directly.'
-        : 'Mock helper: think about what the slide says happens at this step. Have a go first, then ask me again.',
+        ? `(Demo helper) The slide puts it like this: "${passage}" Compare that with what you wrote.`
+        : '(Demo helper) Think about what the slide says happens at this step and which key term it uses. Have a go first; I will not give the answer away.',
       beyond_materials: '',
     };
   }
   if (call.purpose.startsWith('explain')) {
-    return { explanation: 'Mock explanation: re-read the highlighted passage.', beyond_materials: '' } satisfies ExplainOut;
+    const passage = (u.match(/<passage>\n([\s\S]*?)\n<\/passage>/) ?? [])[1] ?? '';
+    return { explanation: `(Demo explanation) The lecture says: ${passage.split(/(?<=[.!?])\s+/).slice(0, 2).join(' ')}`, beyond_materials: '' } satisfies ExplainOut;
   }
   throw new Error('mock: unknown purpose ' + call.purpose);
 }
