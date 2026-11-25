@@ -726,3 +726,4 @@ select { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); 
 .flow-map .substeps li.now::before { content: '▸ '; }
 .lec-time { color: var(--brand); margin-top: 2px; }
 .lesson-head .lh-time { color: var(--brand); }
+.confirm-box { margin-top: 8px; padding: 10px 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--bad) 40%, transparent); background: color-mix(in srgb, var(--bad) 8%, transparent); }

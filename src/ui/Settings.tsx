@@ -6,6 +6,7 @@ import { exportBackup, importBackup } from '../backup';
 import { THEMES, settings, type ThemeName } from '../settings';
 import { SyncCard } from './SyncCard';
 import { DemoCard } from './Demo';
+import { StartAgain } from './StartAgain';
 import { TopBar, useAi, useLive } from './common';
 import { Doodles } from './Doodles';
 import { DataNotice, KeyAndCap } from './Setup';
@@ -154,6 +155,8 @@ export function Settings() {
           </div>
           {msg && <div class="okbox small" style={{ marginTop: '8px' }}>{msg}</div>}
         </div>
+
+        <StartAgain onBackup={doExport} />
 
         <div class="card">
           <h2>Version</h2>

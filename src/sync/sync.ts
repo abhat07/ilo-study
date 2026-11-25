@@ -14,6 +14,7 @@ import { isDemo } from '../mode';
 import type { SlideImage, SourceFile } from '../types';
 import { ConflictError, GitHubRemote, RemoteAuthError, type Remote } from './remote';
 import { canonical, emptySnapshot, mergeSnapshots, type Snapshot } from './merge';
+import { enforceReset, RESET_KEY } from './reset';
 
 const DATA_PATH = 'sync/data.json.gz';
 const K = { repo: 'ilo.syncRepo', token: 'ilo.syncToken', last: 'ilo.syncLast', error: 'ilo.syncError', device: 'ilo.deviceName' };
@@ -95,7 +96,7 @@ export async function exportSnapshot(): Promise<Snapshot> {
     modules, chunks, ilos, items, attempts, disputes, sessions, spend, genlog, events, lectures, sections,
     files: files.map(({ blob, ...rest }) => (void blob, rest)),
     images: images.map(({ blob, ...rest }) => (void blob, rest)),
-    kv: keys.map((k, i) => ({ key: String(k), value: vals[i] })).filter((k) => k.key.startsWith('explain:')),
+    kv: keys.map((k, i) => ({ key: String(k), value: vals[i] })).filter((k) => k.key.startsWith('explain:') || k.key === RESET_KEY),
   };
   return s;
 }
@@ -208,7 +209,9 @@ export async function syncOnce(remote: Remote, device = 'device'): Promise<SyncR
     }
     const mine = await exportSnapshot();
     const merged = mergeSnapshots(mine, theirs);
-    const pulled = await applySnapshot(merged);
+    let pulled = await applySnapshot(merged);
+    // a progress reset from another device: clear this device's older answers too
+    pulled += await enforceReset(Number(merged.stores.kv.find((k) => k.key === RESET_KEY)?.value ?? 0));
     let pushed = false;
     if (!file || canonical(merged) !== canonical(theirs)) {
       merged.at = Date.now();

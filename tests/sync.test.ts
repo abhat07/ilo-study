@@ -270,3 +270,59 @@ describe('slide pictures sync', () => {
     expect(mac.every((i) => i.status === 'removed' && !i.blob)).toBe(true);
   });
 });
+
+import { enforceReset, resetProgress } from '../src/sync/reset';
+
+describe('starting again (progress reset)', () => {
+  let remote: MemoryRemote;
+  beforeEach(() => {
+    devices.clear();
+    remote = new MemoryRemote();
+  });
+
+  it('clears answers on every device but keeps uploads and questions, and later answers survive', async () => {
+    use('mac');
+    let d = await db();
+    await d.put('modules', mod);
+    await d.put('ilos', ilo(1, 'Describe PCR'));
+    await d.put('items', item('q1'));
+    await d.put('items', item('q2'));
+    await d.put('sections', { id: 'S1', moduleId: mod.id, lectureId: 'L1', iloId: 'AMB-01', order: 0, title: 't', intro: '', points: [], visual: { kind: 'none', title: '', columns: [], items: [] }, chunkIds: [], itemIds: ['q1'], seenAt: T0, readTo: 3, updatedAt: T0 });
+    await answer('q1', 'a1', T0 + 1000, 1);
+    await answer('q2', 'a2', T0 + 2000, 0);
+    await syncOnce(remote, 'mac');
+
+    use('phone');
+    await syncOnce(remote, 'phone');
+    await answer('q1', 'a3', T0 + 3000, 1); // answered on the phone, not synced yet
+    expect(await count('attempts')).toBe(3);
+
+    use('mac');
+    await resetProgress();
+    d = await db();
+    expect(await count('attempts')).toBe(0);
+    expect((await d.get('items', 'q1'))!.seenCount).toBe(0);
+    expect((await d.get('sections', 'S1'))!.readTo).toBeUndefined();
+    expect(await count('items')).toBe(2);
+    expect(await count('ilos')).toBe(1);
+    await syncOnce(remote, 'mac');
+
+    // the phone's old answers (including the unsynced one) don't come back
+    use('phone');
+    await syncOnce(remote, 'phone');
+    d = await db();
+    expect(await count('attempts')).toBe(0);
+    expect((await d.get('items', 'q1'))!.seenCount).toBe(0);
+    expect((await d.get('sections', 'S1'))!.seenAt).toBeUndefined();
+    expect(await count('items')).toBe(2);
+
+    // new answers after the reset sync normally
+    await answer('q2', 'a4', Date.now() + 1000, 1);
+    await syncOnce(remote, 'phone');
+    use('mac');
+    await syncOnce(remote, 'mac');
+    expect(await count('attempts')).toBe(1);
+    expect((await (await db()).get('items', 'q2'))!.seenCount).toBe(1);
+    expect(await enforceReset(0)).toBe(0);
+  });
+});

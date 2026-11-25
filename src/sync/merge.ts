@@ -11,7 +11,9 @@
  *  - items (questions): union; most severe status wins (retired > flagged > active); the FSRS
  *    schedule and seen-count are rebuilt from the merged answers when neither side has them all;
  *    duplicate questions generated on two devices for the same passage are retired if unanswered
- *  - kv: only cached explanations are synced
+ *  - kv: only cached explanations and the progress-reset time are synced
+ *  - progress reset ("Start again"): the latest reset time wins; answers, sessions and disputes from before
+ *    it are dropped and lesson reading progress recorded before it is cleared, on both sides, before merging
  *  - images (slide pictures, metadata only): union; removed wins; uploaded/pruned flags are kept once set
  */
 import type { Attempt, Chunk, Dispute, GenLog, Ilo, IngestEvent, Item, LearnSection, Lecture, Module, SessionRecord, SlideImage, SourceFile, SpendRecord } from '../types';
@@ -63,9 +65,32 @@ function unionBy<T>(a: T[], b: T[], key: (x: T) => string, pick: (x: T, y: T) =>
 
 const SEVERITY: Record<Item['status'], number> = { active: 0, flagged: 1, retired: 2 };
 
+const RESET_KEY = 'progressResetAt';
+const resetOf = (s: Snapshot['stores']) => Number(s.kv.find((k) => k.key === RESET_KEY)?.value ?? 0);
+
+/** Remove progress from before a reset (see sync/reset.ts). */
+function scrub(s: Snapshot['stores'], R: number): Snapshot['stores'] {
+  if (!R) return s;
+  return {
+    ...s,
+    attempts: s.attempts.filter((t) => t.at >= R),
+    sessions: s.sessions.filter((x) => x.startedAt >= R),
+    disputes: s.disputes.filter((x) => x.at >= R),
+    sections: s.sections.map((x) => {
+      if (x.updatedAt >= R || (!x.seenAt && !x.readTo)) return x;
+      const { seenAt, readTo, ...rest } = x;
+      void seenAt;
+      void readTo;
+      return rest;
+    }),
+  };
+}
+
 export function mergeSnapshots(a: Snapshot, b: Snapshot): Snapshot {
   // snapshots written before lectures existed lack these stores
-  const A = { ...emptySnapshot().stores, ...a.stores }, B = { ...emptySnapshot().stores, ...b.stores };
+  const A0 = { ...emptySnapshot().stores, ...a.stores }, B0 = { ...emptySnapshot().stores, ...b.stores };
+  const R = Math.max(resetOf(A0), resetOf(B0));
+  const A = scrub(A0, R), B = scrub(B0, R);
 
   const modules = unionBy(A.modules, B.modules, (m) => m.id, (x, y) => ((y.updatedAt ?? y.createdAt) > (x.updatedAt ?? x.createdAt) ? y : x));
 
@@ -98,6 +123,7 @@ export function mergeSnapshots(a: Snapshot, b: Snapshot): Snapshot {
     B.kv.filter((k) => k.key.startsWith('explain:')),
     (k) => k.key,
   );
+  if (R) kv.push({ key: RESET_KEY, value: R });
 
   // Items: union, strictest status, then make the schedule consistent with the merged answers.
   const answersByItem = new Map<string, Attempt[]>();
