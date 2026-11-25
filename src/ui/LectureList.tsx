@@ -2,10 +2,13 @@ import { lectureOverview, nextLecture, type LectureRow } from '../learn/overview
 import { fmtMin } from '../learn/progress';
 import { go, useLive } from './common';
 import { Ring } from './Visual';
+import { lectureReward, sortedModules } from '../reef/state';
 
 /** The module's lectures, each with its progress ring, and what to do next. */
 export function LectureList({ moduleId }: { moduleId: string }) {
   const rows = useLive(() => lectureOverview(moduleId), [moduleId]);
+  const mi = useLive(async () => (await sortedModules()).findIndex((m) => m.id === moduleId), [moduleId]);
+  const withIlos = rows?.filter((r) => r.lecture.iloIds.length).map((r) => r.lecture.id) ?? [];
   if (!rows) return null;
   if (!rows.length) {
     return (
@@ -46,6 +49,7 @@ export function LectureList({ moduleId }: { moduleId: string }) {
                   {r.questions ? ` · ${r.correct}/${r.questions} questions right` : ''}
                 </div>
                 {L.iloIds.length > 0 && <div class="small lec-time">⏱ {timeText(r)}</div>}
+                {L.iloIds.length > 0 && mi !== undefined && mi >= 0 && <RewardLine moduleIndex={mi} lectureIndex={withIlos.indexOf(L.id)} done={r.st.done} />}
               </div>
               {L.iloIds.length > 0 ? (
                 <button class={'btn sm' + (isNext || (r.st.done && r.st.due) ? ' primary' : '')} onClick={() => go(path)}>{label}</button>
@@ -65,4 +69,12 @@ export function timeText(r: LectureRow): string {
   if (r.st.done) return r.mins.recap ? `recap ≈ ${fmtMin(r.mins.recap)}` : `≈ ${fmtMin(r.mins.total)} in total · nothing due`;
   if (r.st.started) return `≈ ${fmtMin(r.mins.left)} left of ≈ ${fmtMin(r.mins.total)}`;
   return `≈ ${fmtMin(r.mins.total)}`;
+}
+
+/** What finishing this lecture adds to the reef. */
+function RewardLine({ moduleIndex, lectureIndex, done }: { moduleIndex: number; lectureIndex: number; done: boolean }) {
+  if (lectureIndex < 0) return null;
+  const rw = lectureReward(moduleIndex, lectureIndex);
+  const what = `${rw.n} ${rw.school.name.toLowerCase()}${rw.special ? ` + ${rw.special.name.toLowerCase()}` : ''}`;
+  return <div class="small lec-reward">{done ? `🐠 Added to your reef: ${what}` : `🎁 Finish to add ${what} to your reef`}</div>;
 }

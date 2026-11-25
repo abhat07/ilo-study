@@ -14,7 +14,7 @@ import { isDemo } from '../mode';
 import type { SlideImage, SourceFile } from '../types';
 import { ConflictError, GitHubRemote, RemoteAuthError, type Remote } from './remote';
 import { canonical, emptySnapshot, mergeSnapshots, type Snapshot } from './merge';
-import { enforceReset, RESET_KEY } from './reset';
+import { enforceReset, isSyncedGameKey, RESET_KEY } from './reset';
 
 const DATA_PATH = 'sync/data.json.gz';
 const K = { repo: 'ilo.syncRepo', token: 'ilo.syncToken', last: 'ilo.syncLast', error: 'ilo.syncError', device: 'ilo.deviceName' };
@@ -96,7 +96,7 @@ export async function exportSnapshot(): Promise<Snapshot> {
     modules, chunks, ilos, items, attempts, disputes, sessions, spend, genlog, events, lectures, sections,
     files: files.map(({ blob, ...rest }) => (void blob, rest)),
     images: images.map(({ blob, ...rest }) => (void blob, rest)),
-    kv: keys.map((k, i) => ({ key: String(k), value: vals[i] })).filter((k) => k.key.startsWith('explain:') || k.key === RESET_KEY),
+    kv: keys.map((k, i) => ({ key: String(k), value: vals[i] })).filter((k) => k.key.startsWith('explain:') || k.key === RESET_KEY || isSyncedGameKey(k.key)),
   };
   return s;
 }

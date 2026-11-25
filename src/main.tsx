@@ -11,6 +11,8 @@ import { Session } from './ui/Session';
 import { ModulePage } from './ui/ModulePage';
 import { Learn } from './ui/Learn';
 import { LectureEdit } from './ui/LectureEdit';
+import { ReefPage } from './ui/ReefPage';
+import { toast } from './ui/fun';
 import { topUpPool } from './engine/generate';
 import { mapModule, scrubRemovedFiles } from './ingest/pipeline';
 import { applyTheme } from './settings';
@@ -42,6 +44,8 @@ setTimeOfDay();
 setInterval(setTimeOfDay, 5 * 60_000);
 document.body.dataset.stage = 'home';
 if (isDemo()) document.body.classList.add('demo');
+// New reef creatures from finished lectures (announced wherever you are)
+addEventListener('reef-news', (e) => ((e as CustomEvent<string[]>).detail ?? []).forEach((m, i) => setTimeout(() => toast(m, 3200), 400 + i * 900)));
 // Ask the browser not to evict our data under storage pressure.
 navigator.storage?.persist?.();
 
@@ -68,6 +72,7 @@ function Screen() {
   }, []);
   const parts = route.split('/').filter(Boolean).map(decodeURIComponent);
   if (parts[0] === 'settings') return <Settings />;
+  if (parts[0] === 'reef') return <ReefPage />;
   if (parts[0] === 'm' && parts[1]) {
     const id = parts[1];
     if (parts[2] === 'upload') return <Upload key={id} moduleId={id} />;

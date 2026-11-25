@@ -13,6 +13,8 @@ import { Doodles } from './Doodles';
 import { Ring } from './Visual';
 import { QUEST_XP, loadGame, type GameState } from '../engine/game';
 import { lectureOverview, nextLecture, type LectureRow } from '../learn/overview';
+import { loadReef, type ReefState } from '../reef/state';
+import { ReefCard } from './Reef';
 
 interface CardInfo {
   m: Module;
@@ -26,7 +28,7 @@ interface CardInfo {
   lectures: LectureRow[];
 }
 
-async function load(): Promise<{ cards: CardInfo[]; stats: GameState }> {
+async function load(): Promise<{ cards: CardInfo[]; stats: GameState; reef: ReefState }> {
   const mods = await ensureModules();
   const cards: CardInfo[] = [];
   for (const m of mods.sort((a, b) => a.createdAt - b.createdAt)) {
@@ -46,7 +48,7 @@ async function load(): Promise<{ cards: CardInfo[]; stats: GameState }> {
     });
   }
   const stats = await loadGame();
-  return { cards, stats };
+  return { cards, stats, reef: await loadReef(stats) };
 }
 
 export function Home() {
@@ -60,6 +62,7 @@ export function Home() {
       <Doodles />
       <TopBar title="ILO Study" />
       <div class="wrap">
+        {data && <ReefCard reef={data.reef} />}
         <div class="hero">
           <h2>{greeting()}{settings.getName() ? `, ${settings.getName()}` : ''} 👋</h2>
           <p>
@@ -79,7 +82,7 @@ export function Home() {
             </div>
           )}
           <div class="stats">
-            <div class="stat"><b><span class="flame">🔥</span> {stats?.streak ?? 0}</b><span>day streak</span></div>
+            <div class="stat"><b><span class="flame">🔥</span> {stats?.streak ?? 0}</b><span>day streak{stats && stats.streakInfo.freezes > 0 ? ` · ❄️${stats.streakInfo.freezes}` : ''}</span></div>
             <div class="stat"><b>{stats?.goal.done ?? 0}<small style={{ fontSize: '0.8rem', opacity: 0.8 }}>/{stats?.goal.target ?? 20}</small></b><span>daily goal</span></div>
             <div class="stat"><b>+{stats?.todayXp ?? 0}</b><span>XP today</span></div>
           </div>

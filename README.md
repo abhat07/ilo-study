@@ -257,7 +257,7 @@ the page margins and never behind the question card.
 ### Game layer (`engine/game.ts`)
 
 XP, levels (Nucleotide → Codon → Gene → … → Biosphere), a 20-question daily goal, 3 daily quests (+30 XP each),
-18 badges, and day streaks. Everything is **derived from your stored answers**, so backups carry it and nothing
+18 badges, day streaks and your reef (below). Everything is **derived from your stored answers**, so backups carry it and nothing
 can drift. The rules reward good learning:
 
 * New questions earn more than repeats (10 vs 6, plus up to 10 for correctness). Due reviews still count.
@@ -265,6 +265,37 @@ can drift. The rules reward good learning:
   reporting it truthfully maximises your expected XP. A unit test checks this for all four confidence levels.
 * "I don't know" earns 3 XP, because attempting before seeing the answer helps.
 * Applying an idea to a new case (+10), written answers (+5) and "Think it through" prompts (+5) earn extra.
+
+### Your reef (`src/reef/`, `ui/Reef.tsx`, `ui/ReefPage.tsx`)
+
+XP builds a living coral reef shown at the top of the home screen (tap it for the full reef page, `#/reef`).
+It is all hand-drawn SVG with real species and one true fact each: 67 creatures and 6 corals.
+
+* **Coral from XP.** Every 50 XP lays down a polyp. Each module grows its own coral species (staghorn, brain,
+  table, …) from the XP earned on it, so the reef grows with every answer.
+* **Schools from lectures.** Each lecture you finish adds 3 fish to that module's school (blue-green chromis,
+  sea goldies, …), so many lectures build one big shoal. Every 3rd lecture of a module also brings a special
+  creature (clownfish in an anemone, octopus, moray, giant clam, …). The lecture list shows what each lecture adds.
+  A lecture's fish stay even if a later wrong answer drops its ring below 100%.
+* **A choice at every level-up.** Pick one of 3 creatures (47 to collect). The offers are the same on every device.
+* **Streak visitors.** 3 days: cleaner shrimp; 7: green sea turtle; 14: manta ray; 30: whale shark;
+  60: humpback whale; 100: coelacanth.
+* **The streak shows in the water.** Tiers (Clear water → Spawning night → Bioluminescence → Thriving reef →
+  Ancient reef → Living legend) add light rays, coral spawn, glowing plankton and golden light. Missed days
+  **bleach** the coral; one study day brings the colour back.
+
+**Streak rules** (`engine/streak.ts`), worked out day by day from your answers:
+
+* Any answer counts, so one question keeps the streak alive.
+* **❄️ Freezes (cryptobiosis):** every 7 days of streak earns one (up to 2). A missed day uses one automatically.
+* **🩹 Repair:** miss a day with no freeze and you have 2 days to save the streak with a big day (40 answers).
+* **💤 Rest day:** choose one weekday that never breaks the streak (applies from the day after you choose).
+* **⚡ Boost:** +10% XP per full week of streak, up to +50%, on days you reach the daily goal.
+* A gel-electrophoresis calendar on the reef page shows the last 5 weeks, one lane per day.
+
+Level-up picks (`reef:pick:<level>`), finished lectures (`reef:lec:<id>`) and rest-day choices
+(`streak:rest:<time>`) are small kv records that sync; everything else is derived. "Start again" clears the reef
+records too (rest-day choices stay, as they are settings).
 
 ### Mastery model (`engine/mastery.ts`)
 

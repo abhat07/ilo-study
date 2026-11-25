@@ -13,6 +13,9 @@ import { replayCard } from '../engine/scheduler';
 
 export const RESET_KEY = 'progressResetAt';
 
+/** kv records the game keeps that sync between devices: reef picks and lectures, rest-day choices */
+export const isSyncedGameKey = (k: string) => k.startsWith('reef:') || k.startsWith('streak:');
+
 export async function progressResetAt(): Promise<number> {
   return kvGet<number>(RESET_KEY, 0);
 }
@@ -49,6 +52,12 @@ export async function enforceReset(at: number): Promise<number> {
       await tx.objectStore('sections').put(rest);
       changed++;
     }
+  }
+  // reef picks and finished-lecture records from before the reset
+  for (const k of await tx.objectStore('kv').getAllKeys()) {
+    if (!String(k).startsWith('reef:')) continue;
+    const v = (await tx.objectStore('kv').get(k)) as { at?: number } | undefined;
+    if (Number(v?.at ?? 0) < at) { await tx.objectStore('kv').delete(k); changed++; }
   }
   const cur = ((await tx.objectStore('kv').get(RESET_KEY)) as number | undefined) ?? 0;
   if (at > cur) await tx.objectStore('kv').put(at, RESET_KEY);

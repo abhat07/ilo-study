@@ -2,6 +2,7 @@
 import { byModule, db } from '../db';
 import type { Lecture } from '../types';
 import { buildLectures } from './lectures';
+import { recordFinishedLectures } from '../reef/state';
 import { latestScores, lectureMinutes, lectureState, liveItems, paceFrom, type LectureState } from './progress';
 
 export interface LectureRow {
@@ -20,7 +21,7 @@ export async function lectureOverview(moduleId: string): Promise<LectureRow[]> {
   const map = new Map(items.map((i) => [i.id, i]));
   const latest = latestScores(attempts);
   const pace = paceFrom(attempts, map);
-  return lectures
+  const rows = lectures
     .filter((l) => l.iloIds.length || l.fileIds.length)
     .map((lecture) => {
       const secs = sections.filter((s) => s.lectureId === lecture.id);
@@ -33,6 +34,10 @@ export async function lectureOverview(moduleId: string): Promise<LectureRow[]> {
         mins: lectureMinutes(lecture, secs, map, latest, pace),
       };
     });
+  // a lecture reaching 100% for the first time adds fish to your reef
+  const news = await recordFinishedLectures(moduleId, rows);
+  if (news.length && typeof CustomEvent !== 'undefined') globalThis.dispatchEvent?.(new CustomEvent('reef-news', { detail: news }));
+  return rows;
 }
 
 /** The lecture to work on next: the first unfinished one (in lecture order) that has ILOs. */

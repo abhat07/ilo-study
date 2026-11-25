@@ -11,13 +11,10 @@
 import type { Attempt, SessionRecord } from '../types';
 import { db } from '../db';
 import { CONF_PROB } from './mastery';
+import { computeStreak, dayKey, DAILY_GOAL, type RestChoice, type StreakState } from './streak';
 
+export { dayKey, DAILY_GOAL };
 const DAY = 86_400_000;
-
-export function dayKey(t: number): string {
-  const d = new Date(t);
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-}
 
 export interface XpBreakdown {
   total: number;
@@ -160,6 +157,10 @@ export interface GameState {
   todayXp: number;
   level: ReturnType<typeof levelFor>;
   streak: number;
+  /** freezes, repair window, rest day, bleaching, boost and day-by-day history */
+  streakInfo: StreakState;
+  /** XP added today by the streak boost */
+  boostXpToday: number;
   studiedToday: boolean;
   answeredToday: number;
   answeredWeek: number;
@@ -168,9 +169,7 @@ export interface GameState {
   badges: Badge[];
 }
 
-export const DAILY_GOAL = 20;
-
-export function computeGame(attempts: Attempt[], sessions: SessionRecord[], now = Date.now()): GameState {
+export function computeGame(attempts: Attempt[], sessions: SessionRecord[], now = Date.now(), rest: RestChoice[] = []): GameState {
   const today = dayKey(now);
   const byDay = new Map<string, Attempt[]>();
   for (const a of attempts) {
@@ -185,14 +184,25 @@ export function computeGame(attempts: Attempt[], sessions: SessionRecord[], now 
     sessByDay.get(k)!.push(s);
   }
 
+  // streak: a day counts if anything was answered (in a session or a lesson)
+  const activity = new Map<string, { answers: number; graded: number }>();
+  for (const [k, as] of byDay) activity.set(k, { answers: as.length, graded: graded(as).length });
+  for (const [k, ss] of sessByDay) if (!activity.has(k) && ss.some((s) => s.attemptIds.length)) activity.set(k, { answers: 1, graded: 0 });
+  const streakInfo = computeStreak(activity, rest, now);
+  const boostOn = new Map(streakInfo.days.map((d) => [d.key, d.boost]));
+
   let xp = 0;
   let todayXp = 0;
+  let boostXpToday = 0;
   let allQuestsDay = false;
   let quests: QuestStatus[] = [];
   const dayKeys = new Set([...byDay.keys(), today]);
   for (const k of dayKeys) {
     const dayAttempts = byDay.get(k) ?? [];
-    let dayXp = dayAttempts.reduce((s, a) => s + xpForAttempt(a).total, 0);
+    const baseXp = dayAttempts.reduce((s, a) => s + xpForAttempt(a).total, 0);
+    const boostXp = Math.round(baseXp * (boostOn.get(k) ?? 0));
+    let dayXp = baseXp + boostXp;
+    if (k === today) boostXpToday = boostXp;
     const qs = questsForDay(k).map((q) => {
       const progress = Math.min(q.target, q.measure(dayAttempts, sessByDay.get(k) ?? []));
       return { id: q.id, label: q.label, emoji: q.emoji, progress, target: q.target, done: progress >= q.target };
@@ -206,25 +216,7 @@ export function computeGame(attempts: Attempt[], sessions: SessionRecord[], now 
     }
   }
 
-  // streak
-  const days = new Set([...sessByDay.entries()].filter(([, ss]) => ss.some((s) => s.attemptIds.length)).map(([k]) => k));
-  const studiedToday = days.has(today);
-  let streak = 0;
-  const d = new Date(now);
-  if (!studiedToday) d.setDate(d.getDate() - 1);
-  while (days.has(dayKey(d.getTime()))) {
-    streak++;
-    d.setDate(d.getDate() - 1);
-  }
-  let longest = 0;
-  {
-    const sorted = [...days].map((k) => { const [y, m, dd] = k.split('-').map(Number); return new Date(y, m - 1, dd).getTime(); }).sort((a, b) => a - b);
-    let run = 0;
-    for (let i = 0; i < sorted.length; i++) {
-      run = i > 0 && Math.round((sorted[i] - sorted[i - 1]) / DAY) === 1 ? run + 1 : 1;
-      longest = Math.max(longest, run);
-    }
-  }
+  const { streak, longest, studiedToday } = streakInfo;
 
   const g = graded(attempts);
   const answeredToday = graded(byDay.get(today) ?? []).length;
@@ -274,6 +266,8 @@ export function computeGame(attempts: Attempt[], sessions: SessionRecord[], now 
     todayXp,
     level: levelFor(xp),
     streak,
+    streakInfo,
+    boostXpToday,
     studiedToday,
     answeredToday,
     answeredWeek,
@@ -285,14 +279,28 @@ export function computeGame(attempts: Attempt[], sessions: SessionRecord[], now 
 
 export async function loadGame(): Promise<GameState> {
   const d = await db();
-  const [attempts, sessions] = await Promise.all([d.getAll('attempts'), d.getAll('sessions')]);
-  return computeGame(attempts, sessions);
+  const [attempts, sessions, keys] = await Promise.all([d.getAll('attempts'), d.getAll('sessions'), d.getAllKeys('kv')]);
+  const restKeys = keys.map(String).filter((k) => k.startsWith(REST_PREFIX));
+  const rest = (await Promise.all(restKeys.map((k) => d.get('kv', k)))) as RestChoice[];
+  return computeGame(attempts, sessions, Date.now(), rest.filter(Boolean));
+}
+
+/** kv keys holding your rest-day choices (one per change, so devices merge cleanly) */
+export const REST_PREFIX = 'streak:rest:';
+export async function chooseRestDay(day: number): Promise<void> {
+  const at = Date.now();
+  await (await db()).put('kv', { day, at } satisfies RestChoice, REST_PREFIX + at);
 }
 
 /** Messages for anything newly achieved between two game states. */
 export function achievements(before: GameState, after: GameState): string[] {
   const out: string[] = [];
-  if (after.level.level > before.level.level) out.push(`⬆️ Level ${after.level.level}: <b>${after.level.title}</b>!`);
+  if (after.level.level > before.level.level) out.push(`⬆️ Level ${after.level.level}: <b>${after.level.title}</b>! 🎁 Choose a new creature for your reef on the home screen`);
+  const bs = before.streakInfo, as = after.streakInfo;
+  if (bs.repair && !as.repair && after.streak > before.streak + 1) out.push(`🩹 Streak repaired: <b>${after.streak} days</b>`);
+  if (as.tier.at > bs.tier.at) out.push(`🌊 Your reef reached <b>${as.tier.name}</b>`);
+  if (as.freezes > bs.freezes) out.push('❄️ You earned a streak freeze');
+  if (before.boostXpToday === 0 && after.boostXpToday > 0) out.push(`⚡ Streak boost: <b>+${Math.round(as.boostToday * 100)}% XP</b> today`);
   const had = new Set(before.badges.filter((b) => b.earned).map((b) => b.id));
   for (const b of after.badges) if (b.earned && !had.has(b.id)) out.push(`${b.emoji} Badge unlocked: <b>${b.name}</b>`);
   const qd = new Set(before.quests.filter((q) => q.done).map((q) => q.id));

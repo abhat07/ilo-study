@@ -34,7 +34,7 @@ export function StartAgain({ onBackup }: { onBackup: () => Promise<void> }) {
       <h2>🧹 Start again</h2>
       <p class="small">
         Clears everything you've answered: every answer, study session and dispute, each question's review schedule,
-        lesson progress (steps read, rings), mastery, XP, level, streak and badges.
+        lesson progress (steps read, rings), mastery, XP, level, streak, badges and your reef (it regrows as you answer).
       </p>
       <p class="small muted">
         Keeps all your uploads{counts ? ` (${counts.files} files)` : ''}, ILOs, lectures, questions and lessons, and the
