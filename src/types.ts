@@ -219,6 +219,7 @@ export interface LearnPoint {
   chunkId: string;
   label?: string; // 1-4 word step heading, e.g. "Denaturation"
   visualItem?: number; // which item of the section's diagram this step is (-1/undefined: none)
+  stressed?: boolean; // the lecturer stressed this (e.g. "this comes up in the exam")
 }
 
 export interface Visual {
@@ -244,7 +245,8 @@ export interface LearnSection {
   itemIds: string[];
   seenAt?: number; // every step read
   readTo?: number; // steps read so far (step-by-step lessons)
-  v?: number; // 2 = step-by-step format with link-back questions
+  v?: number; // 2 = step-by-step format with link-back questions; 3 = built from slides + transcript + module-wide ILOs
+  aims?: string[]; // module-wide ILOs (e.g. AMB-M2) this section feeds into
   updatedAt: number;
 }
 

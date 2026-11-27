@@ -1,7 +1,9 @@
 /** #/reef: the big tank, your collection, and everything about the streak. */
 import { useState } from 'preact/hooks';
 import { TopBar, useLive } from './common';
-import { ReefNotice, ReefTank, PickModal } from './Reef';
+import { ReefNotice, ReefTank, PickModal, SeasonNote } from './Reef';
+import { WeekSoFar } from './WeekReport';
+import { SEASONAL } from '../reef/seasons';
 import { CreatureIcon } from '../reef/art';
 import { LECTURE_SPECIALS, PICKS, SCHOOLS, STREAK_VISITORS, type Organism } from '../reef/catalogue';
 import { loadReef, POLYP_XP, type ReefState } from '../reef/state';
@@ -28,6 +30,7 @@ export function ReefPage() {
             <div class="reef-hud bottom"><span class="grow" /><MotionChip /></div>
           </div>
           <ReefNotice reef={reef} />
+          <SeasonNote reef={reef} full />
         </div>
         {reef.pending.length > 0 && (
           <button class="btn primary big glow" onClick={() => setPicking(true)}>🎁 Choose a new creature ({reef.pending.length} waiting)</button>
@@ -38,7 +41,7 @@ export function ReefPage() {
           <div class="reef-stats">
             <div><b>{reef.polyps}</b><span>polyps</span></div>
             <div><b>{reef.creatures}</b><span>creatures</span></div>
-            <div><b>{reef.owned.length}</b><span>of {SCHOOLS.length + LECTURE_SPECIALS.length + STREAK_VISITORS.length + PICKS.length} species</span></div>
+            <div><b>{reef.owned.length}</b><span>of {SCHOOLS.length + LECTURE_SPECIALS.length + STREAK_VISITORS.length + SEASONAL.length + PICKS.length} species</span></div>
             <div><b>🔥 {g.streak}</b><span>day streak</span></div>
             <div><b>{si.longest}</b><span>longest</span></div>
             <div><b>❄️ {si.freezes}</b><span>freezes</span></div>
@@ -49,6 +52,8 @@ export function ReefPage() {
             lets you choose a creature, and long streaks bring big visitors.
           </p>
         </div>
+
+        <WeekSoFar />
 
         <StreakCard reef={reef} />
 
@@ -69,6 +74,7 @@ export function ReefPage() {
         <Collection reef={reef} title="🐟 Schools" sub="+3 fish for every lecture you finish in that module" list={SCHOOLS.slice(0, Math.max(1, reef.modules.length))} how={(o) => `Finish lectures in ${reef.modules[SCHOOLS.indexOf(o)]?.short ?? 'a module'}`} />
         <Collection reef={reef} title="✨ Lecture creatures" sub="Every 3rd lecture of a module brings one of these" list={LECTURE_SPECIALS} how={() => 'Finish every 3rd lecture of a module'} />
         <Collection reef={reef} title="🌊 Streak visitors" sub="Arrive when your streak reaches their length, and stay" list={STREAK_VISITORS} how={(o) => `Reach a ${o.streakAt}-day streak`} />
+        <Collection reef={reef} title="🗓 Seasonal visitors" sub="Reach your daily goal on enough days during a seasonal event" list={SEASONAL} how={(o) => seasonHow(reef, o)} />
         <Collection reef={reef} title="🎁 Level-up creatures" sub="Choose one of three at every level-up" list={PICKS} how={() => 'Choose at a level-up'} />
       </div>
     </>
@@ -178,3 +184,12 @@ function Gel({ days }: { days: DayInfo[] }) {
   );
 }
 
+
+/** How to get a seasonal visitor: the next event that brings it. */
+function seasonHow(reef: ReefState, o: Organism): string {
+  const on = reef.season.active.find((e) => e.visitor.id === o.id);
+  if (on) return `${on.emoji} On now: ${on.name} (goal on ${on.need} days)`;
+  const nxt = reef.season.next?.visitor.id === o.id ? reef.season.next : undefined;
+  const names: Record<string, string> = { 'basket-star': 'Coral mass spawning (after the Nov/Dec full moons)', 'flashlight-fish': 'The longest night (19–23 Dec)', 'spanish-dancer': 'New Year bloom (31 Dec–2 Jan)', 'bumphead-parrotfish': 'Exam season (the 2 weeks before an exam)' };
+  return (nxt ? `Next: ${nxt.name}, ${new Date(nxt.from).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : names[o.id]) ?? 'A seasonal event';
+}

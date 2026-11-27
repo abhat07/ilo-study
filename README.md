@@ -199,8 +199,37 @@ put-in-order 50 s, short answer 100 s, with an allowance for repeats). After 5 a
 time is used instead. Sections not written yet are counted like the written ones (9 minutes each before any
 exist). Done lectures show the time for the recap that is due.
 
-Sections written in the older format are rewritten step by step the first time you open the lecture, as long as you
-haven't started them. Sections you've started keep their questions and answers.
+**Slides + the lecturer's words.** Each section is written from the whole lecture: its slides *and* the recording
+transcript, sent together (slides first, then the transcript; if a lecture is very long, both get an even share and
+passages matched to its ILOs are kept first). The model builds each step from whichever explains it best, and
+quotes it verbatim either way. In the lesson, a slide quote shows as **📽 slide 12**; a quote from the recording
+shows as **🎙 lecturer · 12:30** and opens as "🎙 In the lecture (12:30): …". Steps the lecturer stressed ("this
+comes up in the exam") are tagged **⭐ Lecturer stressed this**.
+
+* Add a transcript from the lecture list (**＋ 🎙 transcript** on each lecture) or the lesson's side panel: VTT,
+  SRT, TXT (with or without timestamps) or DOCX, e.g. a Panopto caption download. It is filed under that lecture
+  whatever the file is called. Transcripts uploaded with the module's other files work too (by lecture number in
+  the name).
+* Adding a transcript rewrites that lecture's sections you haven't started, so they use it.
+
+**Module-wide ILOs.** On the ILO page, tick **🧭 Module-wide ILO** for the module's overarching outcomes (or paste
+them with "Add as module-wide"). They don't get lessons of their own. Every lesson section says which of them it
+feeds into (shown under the ILO), and one end-of-section question is synoptic, like planning part of an exam essay
+on the module-wide outcome. The module page lists them with the sections that feed into each. They sync as
+`plan:aims:<module>:<time>`. Changing them rewrites the sections you haven't started.
+
+**Write ahead (half price).** The module page (and the exam plan) has **✍️ Write lessons ahead**: every section the
+module still needs goes off as one Message Batch at half price, usually ready within an hour (at most 24 h). The app
+checks every 2 minutes while open and on start, then checks and saves the results exactly like a lesson written on
+the spot (`src/learn/batch.ts`). The batch's estimated cost counts towards your monthly limit while it runs. A
+section you open before the batch finishes is written straight away, and the batch's copy is then skipped. Batches
+are collected by the device that sent them.
+
+**Prompt caching.** The system prompt and the lecture material carry cache breakpoints, so the 2nd, 3rd… section
+of a lecture reads the lecture back at a tenth of the input price (`requestParams` in `src/ai/client.ts`).
+
+Sections written in an older format (or before the lecture had a transcript) are rewritten the first time you open
+the lecture, as long as you haven't started them. Sections you've started keep their questions and answers.
 
 The home card's main button continues the next unfinished lecture. "🔀 Mixed review" still runs the original
 cross-module session; lesson questions you haven't reached yet are kept out of it.
@@ -208,6 +237,21 @@ cross-module session; lesson questions you haven't reached yet are kept out of i
 Cost: one cheap-model call per ILO section, about 0.5p each with the finer steps, so roughly 25p to write lessons for 50 ILOs.
 Sections are written on first open (the first is awaited, the rest continue in the background) and then synced
 like everything else.
+
+## Exam plan (`src/plan/`, `#/plan`)
+
+Exam dates (AMB 12 Jan 2027, Genetics 14 Jan 2027 to start with; change them on the plan page, synced as
+`plan:exam:<module>:<time>`) drive a **rolling plan** worked out afresh from what's left each time, so a missed day
+just spreads over the days remaining:
+
+* Each module's unfinished lectures, in order, are spread evenly over the days before its **review days** (about a
+  fifth of the time left, 1–5 days), with at least 25 minutes per study day so a light load isn't sliced into
+  2-minute bits. Both modules are planned together.
+* Days after the lessons are done are light "keep-up" days (recap and weak spots); the review days are for weak
+  spots, recap and exam-style questions.
+* **Home** shows a countdown card with today's tasks (each with a Go button); **#/plan** has the countdown, minutes
+  a day needed, today's list, weak spots (taught ILOs under 60%), the dates, write-ahead buttons, and a day-by-day
+  calendar.
 
 ## The learning engine
 
@@ -294,6 +338,20 @@ It is all hand-drawn SVG with real species and one true fact each: 67 creatures 
 * **💤 Rest day:** choose one weekday that never breaks the streak (applies from the day after you choose).
 * **⚡ Boost:** +10% XP per full week of streak, up to +50%, on days you reach the daily goal.
 * A gel-electrophoresis calendar on the reef page shows the last 5 weeks, one lane per day.
+
+**Seasons** (`src/reef/seasons.ts`): the reef changes with the calendar, and each event brings a rare visitor if
+you reach your daily goal on enough days while it runs:
+
+* 🌕 **Coral mass spawning**, nights 3–7 after the November and December full moons (worked out from the lunar
+  cycle), as on the Great Barrier Reef: spawn drifts up. Visitor: basket star (3 goal days).
+* 🌌 **The longest night**, 19–23 Dec: bioluminescent plankton. Visitor: splitfin flashlightfish (3 goal days).
+* 🎆 **New Year bloom**, 31 Dec–2 Jan: glowing bursts. Visitor: Spanish dancer (2 goal days).
+* 📝 **Exam season**, the 2 weeks before each exam: golden light. Visitor: bumphead parrotfish (7 goal days).
+
+**Weekly report** (`src/reef/report.ts`): on Sunday (this week) and Monday–Tuesday (last week) the home screen shows
+your reef's week until you close it: XP vs the week before, polyps grown, answers and accuracy, the 7 days (goal days
+in green), best day, fish and creatures that arrived, and a "best week yet" note. The reef page always shows this
+week so far.
 
 Level-up picks (`reef:pick:<level>`), finished lectures (`reef:lec:<id>`) and rest-day choices
 (`streak:rest:<time>`) are small kv records that sync; everything else is derived. "Start again" clears the reef

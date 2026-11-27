@@ -82,7 +82,10 @@ export function mockRespond(call: JsonCall): unknown {
   if (call.purpose.startsWith('lesson')) {
     // Fake lesson: points are the passages' own sentences (so quotes are verbatim); every question type is used.
     const iloLine = (u.match(/^ILO ([A-Z]+-\d+): (.*)$/m) ?? []) as string[];
-    const passages = [...u.matchAll(/<passage id="([^"]+)" where="[^"]*">\n([\s\S]*?)\n<\/passage>/g)];
+    const allPassages = [...u.matchAll(/<passage id="([^"]+)"[^>]*>\n([\s\S]*?)\n<\/passage>/g)];
+    // the passages matched to this ILO (the whole lecture is sent; see learn/sections.ts)
+    const focus = ((u.match(/^Passages matched to this ILO: (.*)$/m) ?? [])[1] ?? '').split(/,\s*/).filter((x) => /^p\d+$/.test(x));
+    const passages = focus.length ? allPassages.filter((p) => focus.includes(p[1])) : allPassages;
     const points: { text: string; quote: string; passage_id: string; label?: string; visual_item?: number }[] = [];
     const seenP = new Set<string>();
     for (const [, pid, text] of passages) {
@@ -165,6 +168,7 @@ export function mockRespond(call: JsonCall): unknown {
     }
     const title = (iloLine[2] ?? 'Lesson section').replace(/^(Describe|Explain|Interpret|Compare|Outline)\s+/i, '').replace(/^./, (c) => c.toUpperCase()).slice(0, 100);
     return {
+      module_aims: [...u.matchAll(/^([A-Z]+-M\d+): /gm)].slice(0, 1).map((m) => m[1]),
       title, intro: `This part of the lecture in ${points.length} small steps. After each one you answer a question on it, then one linking it back to the step before.`, points, visual, questions,
     };
   }

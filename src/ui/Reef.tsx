@@ -8,6 +8,7 @@ import { REPAIR_GOAL } from '../engine/streak';
 import { go } from './common';
 import { toast } from './fun';
 import { MotionChip } from './motion';
+import { daysUntil } from '../reef/seasons';
 
 const W = 480;
 const f = (n: number) => n.toFixed(1);
@@ -134,6 +135,12 @@ export function ReefTank({ reef, H = 230, onClick }: { reef: ReefState; H?: numb
   const top = mix('#1b93c9', '#5f7d8c', b * 0.6);
   const bottom = mix('#0a4d78', '#3f5866', b * 0.6);
   const r = rng('fx');
+  // seasonal events switch effects on whatever the streak
+  const fx = new Set(reef.season.active.map((e) => e.effect));
+  const rays = streak >= 3 || fx.has('exam');
+  const gold = streak >= 30 || fx.has('exam');
+  const spawn = streak >= 7 || fx.has('spawn');
+  const glow = streak >= 14 || fx.has('glow') || fx.has('bursts');
   return (
     <svg viewBox={`0 0 ${W} ${H}`} class={'reef-tank' + (onClick ? ' clickable' : '')} onClick={onClick} role="img"
       aria-label={`Your reef: ${reef.polyps} polyps, ${reef.creatures} creatures, ${streak}-day streak${b > 0 ? ', bleaching' : ''}`}>
@@ -152,12 +159,12 @@ export function ReefTank({ reef, H = 230, onClick }: { reef: ReefState; H?: numb
         </linearGradient>
       </defs>
       <rect width={W} height={H} fill={`url(#${id}-w)`} />
-      {streak >= 3 && (
+      {rays && (
         <g class="rf-rays" fill="#fff">
           {[40, 150, 260, 370].map((x, i) => <path d={`M ${x} 0 L ${x + 40} 0 L ${x + 110} ${sandY} L ${x + 50} ${sandY} Z`} opacity="0.06" style={{ animationDelay: `${-i * 1.7}s` }} />)}
         </g>
       )}
-      {streak >= 30 && <rect width={W} height={H} fill={`url(#${id}-g)`} />}
+      {gold && <rect width={W} height={H} fill={`url(#${id}-g)`} />}
       {far}
       {/* live rock */}
       <path d={`M 0 ${sandY + 6} Q 40 ${sandY - 22} 90 ${sandY - 6} Q 130 ${sandY - 30} 190 ${sandY - 4} Q 250 ${sandY - 18} 300 ${sandY} Q 360 ${sandY - 26} 420 ${sandY - 4} Q 455 ${sandY - 14} ${W} ${sandY} L ${W} ${H} L 0 ${H} Z`} fill="#4d4363" />
@@ -167,14 +174,26 @@ export function ReefTank({ reef, H = 230, onClick }: { reef: ReefState; H?: numb
       <path d={`M 0 ${sandY + 10} Q 80 ${sandY + 2} 160 ${sandY + 9} T 320 ${sandY + 8} T ${W} ${sandY + 6} L ${W} ${H} L 0 ${H} Z`} fill={`url(#${id}-s)`} />
       {ground.map((p) => p.el)}
       {water}
-      {streak >= 7 && (
+      {spawn && (
         <g fill="#ffd1e8">
-          {Array.from({ length: 14 }, (_, i) => <circle class="rf-rise" cx={f(20 + r() * (W - 40))} cy={sandY} r={f(0.8 + r() * 1.2)} style={{ animationDelay: `${f(-r() * 9)}s`, animationDuration: `${f(7 + r() * 5)}s` }} />)}
+          {Array.from({ length: fx.has('spawn') ? 46 : 14 }, (_, i) => <circle class="rf-rise" cx={f(20 + r() * (W - 40))} cy={sandY} r={f(0.8 + r() * 1.2)} style={{ animationDelay: `${f(-r() * 9)}s`, animationDuration: `${f(7 + r() * 5)}s` }} />)}
         </g>
       )}
-      {streak >= 14 && (
+      {glow && (
         <g fill="#7ff9ff">
-          {Array.from({ length: 26 }, () => <circle class="rf-twinkle" cx={f(r() * W)} cy={f(r() * sandY)} r={f(0.6 + r() * 0.9)} style={{ animationDelay: `${f(-r() * 4)}s` }} />)}
+          {Array.from({ length: fx.has('glow') ? 60 : 26 }, () => <circle class="rf-twinkle" cx={f(r() * W)} cy={f(r() * sandY)} r={f(0.6 + r() * 0.9)} style={{ animationDelay: `${f(-r() * 4)}s` }} />)}
+        </g>
+      )}
+      {fx.has('bursts') && (
+        <g>
+          {[[90, 50, '#7ff9ff'], [250, 34, '#ffd1e8'], [390, 60, '#c4f1a0']].map(([cx, cy, c], k) => (
+            <g key={k} fill={c as string}>
+              {Array.from({ length: 12 }, (_, i) => {
+                const a = (i / 12) * Math.PI * 2;
+                return <circle class="rf-twinkle" cx={f(Number(cx) + Math.cos(a) * 16)} cy={f(Number(cy) + Math.sin(a) * 16)} r="1.3" style={{ animationDelay: `${f(-k * 0.9 - i * 0.05)}s` }} />;
+              })}
+            </g>
+          ))}
         </g>
       )}
       <g fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="0.7">
@@ -211,9 +230,33 @@ export function ReefCard({ reef }: { reef: ReefState }) {
         <button class="gift-btn" onClick={() => setPicking(true)}>🎁 Level up! Choose a new creature for your reef{reef.pending.length > 1 ? ` (${reef.pending.length} waiting)` : ''}</button>
       )}
       <ReefNotice reef={reef} />
+      <SeasonNote reef={reef} />
       {picking && <PickModal reef={reef} onClose={() => setPicking(false)} />}
     </div>
   );
+}
+
+/** A seasonal event on now (with progress towards its visitor), or one coming within a week. */
+export function SeasonNote({ reef, full }: { reef: ReefState; full?: boolean }) {
+  const now = Date.now();
+  const { active, next, progress } = reef.season;
+  const lines = active.map((ev) => {
+    const p = progress.find((x) => x.ev.id === ev.id);
+    const daysLeft = daysUntil(ev.to, now) + 1;
+    return (
+      <div key={ev.id} class="reef-note season">
+        {ev.emoji} <b>{ev.name}</b>{full ? `: ${ev.desc}` : ''}{' '}
+        {p?.earned
+          ? <>The <b>{ev.visitor.name.toLowerCase()}</b> has joined your reef.</>
+          : <>Reach your daily goal on {ev.need} day{ev.need === 1 ? '' : 's'} ({p?.goalDays ?? 0}/{ev.need}) in the next {daysLeft} day{daysLeft === 1 ? '' : 's'} and a rare <b>{ev.visitor.name.toLowerCase()}</b> joins your reef.</>}
+      </div>
+    );
+  });
+  if (!active.length && next && (full || daysUntil(next.from, now) <= 7)) {
+    const n = daysUntil(next.from, now);
+    lines.push(<div key="next" class="reef-note season soft">{next.emoji} Coming {n === 1 ? 'tomorrow' : `in ${n} days`}: <b>{next.name}</b>{full ? ` (${new Date(next.from).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}). ${next.desc}` : ''}</div>);
+  }
+  return lines.length ? <>{lines}</> : null;
 }
 
 /** The one thing the streak needs from you today, if anything. */

@@ -3,6 +3,7 @@ import { fmtMin } from '../learn/progress';
 import { go, useLive } from './common';
 import { Ring } from './Visual';
 import { lectureReward, sortedModules } from '../reef/state';
+import { TranscriptButton } from './Transcript';
 
 /** The module's lectures, each with its progress ring, and what to do next. */
 export function LectureList({ moduleId }: { moduleId: string }) {
@@ -27,7 +28,7 @@ export function LectureList({ moduleId }: { moduleId: string }) {
         <a class="small" href={`#/m/${moduleId}/lectures`}>Edit lectures</a>
       </div>
       <p class="small muted" style={{ marginTop: '0px' }}>
-        Each lecture is a lesson taught in small steps from your slides: one idea, a question on it, a question linking it back,
+        Each lecture is a lesson taught in small steps from your slides and the recording transcript (🎙): one idea, a question on it, a question linking it back,
         then the next idea. Wrong answers repeat until right; at 100% the lecture moves to spaced recap. Times are estimates
         and adjust to your own pace once you have answered a few questions.
       </p>
@@ -47,6 +48,7 @@ export function LectureList({ moduleId }: { moduleId: string }) {
                 <div class="small muted">
                   {L.iloIds.length} ILO{L.iloIds.length === 1 ? '' : 's'} · {L.fileIds.length} file{L.fileIds.length === 1 ? '' : 's'}
                   {r.questions ? ` · ${r.correct}/${r.questions} questions right` : ''}
+                  {' · '}<TranscriptButton lecture={L} compact />
                 </div>
                 {L.iloIds.length > 0 && <div class="small lec-time">⏱ {timeText(r)}</div>}
                 {L.iloIds.length > 0 && mi !== undefined && mi >= 0 && <RewardLine moduleIndex={mi} lectureIndex={withIlos.indexOf(L.id)} done={r.st.done} />}

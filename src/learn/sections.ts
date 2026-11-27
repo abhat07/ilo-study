@@ -1,17 +1,26 @@
 /**
- * Lesson sections: one per ILO in a lecture. Each has a concise explanation built only from that
- * lecture's passages (every point backed by a verbatim quote), a visual, and questions on EVERY point,
- * plus "link" questions that connect it to earlier points (the building blocks of essay answers).
+ * Lesson sections: one per ILO in a lecture. Each has a concise explanation built from that lecture's
+ * slides AND the lecturer's spoken words (the recording transcript), every point backed by a verbatim
+ * quote from one of them, a visual, and questions on EVERY point, plus "link" questions that connect it
+ * to earlier points and to the module-wide ILOs (the building blocks of essay answers).
+ *
+ * The whole lecture's material goes first in the request and is prompt-cached, so writing the 2nd, 3rd…
+ * section of a lecture reads it back at a tenth of the price. Writing is split into prepare → call →
+ * finish so whole modules can also be written ahead as a half-price Message Batch (learn/batch.ts).
  */
 import { byModule, db, notifyChange, uid } from '../db';
-import type { Chunk, Ilo, Item, LearnPoint, LearnSection, Lecture, Visual } from '../types';
-import { AiUnavailableError, callJSON } from '../ai/client';
+import type { Chunk, Ilo, Item, LearnPoint, LearnSection, Lecture, SourceFile, Visual } from '../types';
+import { AiUnavailableError, callJSON, type JsonCall } from '../ai/client';
 import { MODELS } from '../ai/pricing';
 import { GEN_SCHEMA, type GenItemOut } from '../ai/prompts';
 import { locatorLabel, normalise, quoteInPassage } from '../ingest/text';
 import { tokens } from '../ingest/lexical';
 import { newCard } from '../engine/scheduler';
 import { validateItem } from '../engine/generate';
+import { moduleAims, type Aim } from '../plan/store';
+
+/** Lesson format version: 3 = slides + transcript + module-wide ILOs. Unstarted older sections are rewritten. */
+export const SECTION_V = 3;
 
 // ---------------- prompt ----------------
 
@@ -23,7 +32,8 @@ const genItem = (GEN_SCHEMA as any).properties.items.items;
 export const LEARN_SCHEMA = obj({
   title: str,
   intro: str,
-  points: { type: 'array', items: obj({ label: str, text: str, quote: str, passage_id: str, visual_item: { type: 'integer' } }) },
+  module_aims: strArr,
+  points: { type: 'array', items: obj({ label: str, text: str, quote: str, passage_id: str, visual_item: { type: 'integer' }, stressed: { type: 'boolean' } }) },
   visual: obj({
     kind: { type: 'string', enum: ['process', 'cycle', 'compare', 'parts', 'none'] },
     title: str,
@@ -40,21 +50,32 @@ export const LEARN_SCHEMA = obj({
   },
 });
 
-interface LearnOut {
+export interface LearnOut {
   title: string;
   intro: string;
-  points: { label?: string; text: string; quote: string; passage_id: string; visual_item?: number }[];
+  module_aims?: string[];
+  points: { label?: string; text: string; quote: string; passage_id: string; visual_item?: number; stressed?: boolean }[];
   visual: Visual;
   questions: (GenItemOut & { point_index: number; link_points: string[]; passage_id: string })[];
 }
 
-export const LEARN_SYSTEM = `You write one section of a concise, exam-focused lesson for a second-year Biological Sciences undergraduate at Imperial College London. The section covers ONE intended learning outcome (ILO) and uses ONLY the lecture passages given.
+export const LEARN_SYSTEM = `You write one section of a concise, exam-focused lesson for a second-year Biological Sciences undergraduate at Imperial College London. The section covers ONE intended learning outcome (ILO) of a lecture and uses ONLY that lecture's material, which is given first.
+
+SOURCES
+- type="slide" passages are the lecture slides. type="spoken" passages are the lecturer's own words from the recording transcript (automatic captions, so expect the odd mis-heard word).
+- When both exist, build the section from BOTH: slides give the structure, key terms and diagrams; the spoken passages give the lecturer's reasoning, examples, analogies and emphasis. Where the lecturer explains a point more fully than the slide, base the point on (and quote) the spoken passage. A good section usually quotes both kinds.
+- Anything the lecturer stresses ("this is important", "you need to know", "this comes up in the exam", repeated points) must be included; set stressed = true on that point.
+- Spoken quotes are copied verbatim from the transcript even if a caption word is wrong; write the point text itself with the correct scientific terms.
+- Start from the passages listed as matched to this ILO, but use any passage of the lecture that teaches it.
+
+MODULE-WIDE OUTCOMES
+- The module also has overarching outcomes (ids like AMB-M1) if listed. module_aims: the ids this ILO feeds into ([] if none are listed or none apply). In the intro, say in one short clause how this ILO serves that module-wide outcome.
 
 EXPLANATION
 - title: the topic in 3-8 words.
 - intro: 1-2 sentences on what this section covers and why it matters for the ILO.
-- points: the lesson is taught as small STEPS, one point at a time, each followed by questions on it. Write 5-14 points in teaching order that together cover everything the passages say that is relevant to this ILO. Break the content down as finely as the material allows: ONE idea per point (e.g. for PCR: what PCR does, then denaturation, then annealing, then extension, then why it repeats), each building on the one before.
-  label: 1-4 words naming the step (e.g. "Denaturation", "Why Taq?"). text: 1-3 plain sentences (at most 50 words) explaining that one idea clearly, in the passages' terms.
+- points: the lesson is taught as small STEPS, one point at a time, each followed by questions on it. Write 5-14 points in teaching order that together cover everything the material says that is relevant to this ILO. Break the content down as finely as the material allows: ONE idea per point (e.g. for PCR: what PCR does, then denaturation, then annealing, then extension, then why it repeats), each building on the one before.
+  label: 1-4 words naming the step (e.g. "Denaturation", "Why Taq?"). text: 1-3 plain sentences (at most 50 words) explaining that one idea clearly, in the lecture's terms.
   Leave out anything not examinable: admin, housekeeping, anecdotes, jokes, history that doesn't explain a mechanism.
 - Every point needs quote (copied verbatim from ONE passage, a contiguous span of 8-40 words that supports it) and passage_id (that passage's id).
 - visual_item: the 0-based index of the visual item this point corresponds to (it is highlighted while the step is taught), or -1.
@@ -67,51 +88,95 @@ QUESTIONS
 - For EVERY point, write 1-2 questions that test it (point_index = that point's 0-based index; passage_id = the point's passage; link_points = []). Vary types: cloze for key terms, mcq for concepts and common misconceptions, short for mechanisms ("explain why/how"), order when the point describes a sequence. source_quote must be verbatim from that passage.
 - For EVERY point after the first, also write 1 LINK-BACK question asked straight after it, connecting it to an earlier step of this section (e.g. after annealing: "Why must denaturation happen before the primers can anneal?"; or "Put the steps so far in order"). point_index = the new point, link_points = ["S" + the earlier point's index], type mcq, short (2-3 point rubric) or order, source_quote from the new point's passage.
 - Then write 1-3 END-OF-SECTION LINK questions (point_index = -1, type short) that make the student connect this ILO to the EARLIER POINTS listed (from earlier in this lecture or previous lectures), e.g. "Explain how X relates to Y", "Predict what happens to Y if X fails", "Compare X and Y". Give a 2-4 point rubric drawing on both. link_points lists the earlier point ids used (e.g. "E3"). If no earlier points are given, link between points of this section and use "S" + index. passage_id = the passage of this section most used.
+- If module_aims is not empty, one END-OF-SECTION question must be synoptic: the student uses this section in part of an answer to that module-wide outcome, like planning an exam essay paragraph (3-4 point rubric; link_points includes the module-wide id, e.g. "AMB-M2").
 - Item field rules: mcq has 4 options, one correct, plausible distractors, option_explanations for each; cloze replaces one key term with "____"; short has a model answer and rubric; order lists 3-7 steps in correct order. Fill unused fields with "", [], 0 or false. beyond_materials only for short context not in the passages (never graded), else "".
-- Use UK spelling and the passages' terminology.`;
+- Use UK spelling and the lecture's terminology.`;
 
-function learnUser(ilo: Ilo, lecture: Lecture, passages: { pid: string; where: string; text: string }[], earlier: { id: string; text: string; from: string }[]): string {
-  const ps = passages.map((p) => `<passage id="${p.pid}" where="${p.where}">\n${p.text}\n</passage>`).join('\n');
+// ---------------- lecture material (the cached prefix) ----------------
+
+/** A recording transcript: captions files, or a text/Word file named as a transcript. */
+export function isTranscript(f: Pick<SourceFile, 'kind' | 'name'> | undefined, c?: Pick<Chunk, 'locator'>): boolean {
+  if (c?.locator.kind === 'time') return true;
+  if (!f) return false;
+  return f.kind === 'transcript' || /transcript|caption|recording|panopto|subtitles?/i.test(f.name);
+}
+
+/** Total size of the lecture material sent with every section (≈ 17k tokens); cached after the first call. */
+export const MATERIAL_CHARS = 60_000;
+
+export interface Material {
+  passages: Chunk[]; // p1, p2, … in this order
+  spoken: Set<string>; // chunk ids that are the lecturer's words
+}
+
+const locNum = (c: Chunk) => (c.locator.kind === 'slide' ? c.locator.slide : c.locator.kind === 'page' ? c.locator.page : c.locator.kind === 'time' ? c.locator.start : c.locator.section);
+
+/**
+ * Everything the lecture says, slides first then the transcript, in order. If it is too long, the two
+ * share the space evenly (either can use what the other doesn't need), keeping passages matched to the
+ * lecture's ILOs first; what's kept stays in lecture order.
+ */
+export function lectureMaterial(lecture: Lecture, chunks: Chunk[], files: Map<string, SourceFile>): Material {
+  const usable = chunks.filter((c) => c.status === 'active' && lecture.fileIds.includes(c.fileId) && c.text.trim().length >= 20);
+  const sort = (a: Chunk, b: Chunk) => a.fileName.localeCompare(b.fileName) || locNum(a) - locNum(b);
+  const spokenC = usable.filter((c) => isTranscript(files.get(c.fileId), c)).sort(sort);
+  const slideC = usable.filter((c) => !isTranscript(files.get(c.fileId), c)).sort(sort);
+  const size = (cs: Chunk[]) => cs.reduce((n, c) => n + c.text.length, 0);
+  const lectureIlos = new Set(lecture.iloIds);
+  const trim = (cs: Chunk[], budget: number): Chunk[] => {
+    if (size(cs) <= budget) return cs;
+    const keep = new Set<string>();
+    let n = 0;
+    const ranked = [...cs].sort((a, b) => Number(b.iloIds.some((i) => lectureIlos.has(i))) - Number(a.iloIds.some((i) => lectureIlos.has(i))));
+    for (const c of ranked) if (n + c.text.length <= budget) { keep.add(c.id); n += c.text.length; }
+    return cs.filter((c) => keep.has(c.id));
+  };
+  const half = MATERIAL_CHARS / 2;
+  const slides = trim(slideC, MATERIAL_CHARS - Math.min(size(spokenC), half));
+  const spoken = trim(spokenC, MATERIAL_CHARS - size(slides));
+  return { passages: [...slides, ...spoken], spoken: new Set(spoken.map((c) => c.id)) };
+}
+
+export function materialText(lecture: Lecture, moduleName: string, aims: Aim[], m: Material): string {
+  const where = (c: Chunk) => (m.spoken.has(c.id) ? `lecture recording ${locatorLabel(c.locator)}` : `${c.fileName}, ${locatorLabel(c.locator)}`);
+  const ps = m.passages.map((c, i) => `<passage id="p${i + 1}" type="${m.spoken.has(c.id) ? 'spoken' : 'slide'}" where="${where(c)}">\n${c.text}\n</passage>`).join('\n');
+  return `MODULE: ${moduleName}
+MODULE-WIDE OUTCOMES:
+${aims.length ? aims.map((a) => `${a.id}: ${a.text}`).join('\n') : '(none given)'}
+
+LECTURE ${lecture.number || ''}: ${lecture.title}
+MATERIAL (${m.passages.length - m.spoken.size} slide passages, ${m.spoken.size} spoken passages):
+${ps}`;
+}
+
+/** The passages matched to this ILO (by the mapping step, else by shared words). */
+export function focusFor(ilo: Ilo, m: Material): number[] {
+  let idx = m.passages.map((c, i) => (c.iloIds.includes(ilo.id) ? i : -1)).filter((i) => i >= 0);
+  if (!idx.length) {
+    const w = new Set(tokens(ilo.text));
+    idx = m.passages
+      .map((c, i) => ({ i, s: tokens(c.text).filter((t) => w.has(t)).length }))
+      .filter((x) => x.s >= 2)
+      .sort((a, b) => b.s - a.s)
+      .slice(0, 8)
+      .map((x) => x.i)
+      .sort((a, b) => a - b);
+  }
+  return idx;
+}
+
+function sectionUser(ilo: Ilo, focus: number[], earlier: { id: string; text: string; from: string }[]): string {
   const ep = earlier.length ? earlier.map((e) => `${e.id}: ${e.text} (${e.from})`).join('\n') : '(none: this is the first section)';
-  return `LECTURE ${lecture.number || ''}: ${lecture.title}
+  return `WRITE THE SECTION FOR THIS ILO:
 ILO ${ilo.id}: ${ilo.text}
 
-PASSAGES:
-${ps}
+Passages matched to this ILO: ${focus.length ? focus.map((i) => `p${i + 1}`).join(', ') : '(none matched: find what teaches it)'}
 
 EARLIER POINTS (for link questions):
 ${ep}`;
 }
 
 // ---------------- generation ----------------
-
-const MAX_CHARS = 11_000;
-
-/** Passages of this lecture that teach this ILO (slides first, then transcript), within a size budget. */
-function passagesFor(ilo: Ilo, lecture: Lecture, chunks: Chunk[], files: Map<string, { kind: string; name: string }>): Chunk[] {
-  const inLecture = chunks.filter((c) => c.status === 'active' && lecture.fileIds.includes(c.fileId) && c.text.length >= 40);
-  let picked = inLecture.filter((c) => c.iloIds.includes(ilo.id));
-  if (picked.length === 0) {
-    const w = new Set(tokens(ilo.text));
-    picked = inLecture
-      .map((c) => ({ c, s: tokens(c.text).filter((t) => w.has(t)).length }))
-      .filter((x) => x.s >= 2)
-      .sort((a, b) => b.s - a.s)
-      .slice(0, 5)
-      .map((x) => x.c);
-  }
-  const rank = (c: Chunk) => (files.get(c.fileId)?.kind === 'pdf' || files.get(c.fileId)?.kind === 'pptx' ? 0 : 1);
-  const loc = (c: Chunk) => (c.locator.kind === 'slide' ? c.locator.slide : c.locator.kind === 'page' ? c.locator.page : c.locator.kind === 'time' ? c.locator.start : c.locator.section);
-  picked.sort((a, b) => rank(a) - rank(b) || a.fileName.localeCompare(b.fileName) || loc(a) - loc(b));
-  const out: Chunk[] = [];
-  let n = 0;
-  for (const c of picked) {
-    if (n + c.text.length > MAX_CHARS) continue;
-    out.push(c);
-    n += c.text.length;
-  }
-  return out;
-}
 
 const STOP = new Set('which their there these those about would could should being between through during because'.split(' '));
 /** Free fallback so every point is tested: blank the most specific word of the point's quote. */
@@ -127,54 +192,86 @@ function localCloze(point: LearnPoint): { prompt: string; answer: string } | nul
   return { prompt: words.map((w, i) => (i === best ? w.replace(answer, '____') : w)).join(' '), answer };
 }
 
-export async function generateSection(lecture: Lecture, ilo: Ilo, order: number): Promise<LearnSection> {
+/** A section ready to be written: the request, plus what's needed to check the reply (kept for batches). */
+export interface SectionJob {
+  lectureId: string;
+  moduleId: string;
+  iloId: string;
+  order: number;
+  /** chunk ids in passage order (p1 = first) */
+  chunkIds: string[];
+  aimIds: string[];
+  call: JsonCall;
+}
+
+const sectionIdOf = (lectureId: string, iloId: string) => `${lectureId}|${iloId}`;
+
+async function saveEmpty(lecture: Lecture, ilo: Ilo, order: number, intro: string): Promise<LearnSection> {
+  const s: LearnSection = {
+    id: sectionIdOf(lecture.id, ilo.id), moduleId: lecture.moduleId, lectureId: lecture.id, iloId: ilo.id, order, title: ilo.text.slice(0, 80),
+    intro, points: [], visual: { kind: 'none', title: '', columns: [], items: [] }, chunkIds: [], itemIds: [], updatedAt: Date.now(), v: SECTION_V,
+  };
+  await (await db()).put('sections', s);
+  notifyChange();
+  return s;
+}
+
+export const NO_MATERIAL = 'No slides or transcript in this lecture were matched to this outcome yet. Upload the lecture (or its transcript) to get a lesson.';
+
+/** Build the request for one section, or save an empty section when the lecture has no material for it. */
+export async function prepareSection(lecture: Lecture, ilo: Ilo, order: number): Promise<SectionJob | LearnSection> {
   const d = await db();
-  const [chunks, files, sections, ilos] = await Promise.all([
+  const [chunks, files, sections, lectures, mod, aims] = await Promise.all([
     byModule('chunks', lecture.moduleId),
     byModule('files', lecture.moduleId),
     byModule('sections', lecture.moduleId),
-    byModule('ilos', lecture.moduleId),
+    byModule('lectures', lecture.moduleId),
+    d.get('modules', lecture.moduleId),
+    moduleAims(lecture.moduleId),
   ]);
-  const fileMap = new Map(files.map((f) => [f.id, f]));
-  const passages = passagesFor(ilo, lecture, chunks, fileMap);
-  const sectionId = `${lecture.id}|${ilo.id}`;
-  const now = Date.now();
-  const empty: LearnSection = {
-    id: sectionId, moduleId: lecture.moduleId, lectureId: lecture.id, iloId: ilo.id, order, title: ilo.text.slice(0, 80),
-    intro: 'No slides in this lecture were matched to this outcome yet. Upload the lecture (or its transcript) to get a lesson.',
-    points: [], visual: { kind: 'none', title: '', columns: [], items: [] }, chunkIds: [], itemIds: [], updatedAt: now,
-  };
-  if (passages.length === 0) {
-    await d.put('sections', empty);
-    notifyChange();
-    return empty;
-  }
+  const material = lectureMaterial(lecture, chunks, new Map(files.map((f) => [f.id, f])));
+  if (material.passages.length === 0) return saveEmpty(lecture, ilo, order, NO_MATERIAL);
 
-  // earlier points: this lecture's earlier sections, then up to 10 from the previous lecture
-  const lectures = await byModule('lectures', lecture.moduleId);
+  // earlier points: this lecture's earlier sections, then the previous lecture's
   const prevLecture = lectures.filter((l) => l.number > 0 && l.number < lecture.number).sort((a, b) => b.number - a.number)[0];
   const earlierSecs = [
     ...sections.filter((s) => s.lectureId === lecture.id && s.order < order).sort((a, b) => a.order - b.order),
     ...(prevLecture ? sections.filter((s) => s.lectureId === prevLecture.id) : []),
   ];
-  const earlier: { id: string; text: string; from: string; sectionId: string; idx: number }[] = [];
+  const earlier: { id: string; text: string; from: string }[] = [];
   for (const s of earlierSecs) {
     const from = s.lectureId === lecture.id ? `this lecture: ${s.title}` : `Lecture ${prevLecture!.number}: ${s.title}`;
-    s.points.forEach((p, idx) => earlier.push({ id: `E${earlier.length + 1}`, text: p.text, from, sectionId: s.id, idx }));
+    s.points.forEach((p) => earlier.push({ id: `E${earlier.length + 1}`, text: p.text, from }));
   }
-  const earlierUsed = earlier.slice(0, 30);
 
-  const pmap = new Map(passages.map((c, i) => [`p${i + 1}`, c]));
-  const out = await callJSON<LearnOut>({
-    purpose: 'lesson section',
-    tier: 'BULK',
-    system: LEARN_SYSTEM,
-    user: learnUser(ilo, lecture, passages.map((c, i) => ({ pid: `p${i + 1}`, where: `${c.fileName}, ${locatorLabel(c.locator)}`, text: c.text })), earlierUsed),
-    schema: LEARN_SCHEMA,
-    maxTokens: 24_000,
-    expectedOutputTokens: 9000,
-    effort: 'medium',
-  });
+  return {
+    lectureId: lecture.id, moduleId: lecture.moduleId, iloId: ilo.id, order,
+    chunkIds: material.passages.map((c) => c.id),
+    aimIds: aims.map((a) => a.id),
+    call: {
+      purpose: 'lesson section',
+      tier: 'BULK',
+      system: LEARN_SYSTEM,
+      prefix: materialText(lecture, mod?.name ?? lecture.moduleId, aims, material),
+      user: sectionUser(ilo, focusFor(ilo, material), earlier.slice(0, 30)),
+      schema: LEARN_SCHEMA,
+      maxTokens: 24_000,
+      expectedOutputTokens: 9000,
+      effort: 'medium',
+    },
+  };
+}
+
+/** Check a written section against its passages and save it with its questions. */
+export async function finishSection(job: Omit<SectionJob, 'call'>, out: LearnOut): Promise<LearnSection> {
+  const d = await db();
+  const lecture = (await d.get('lectures', job.lectureId))!;
+  const ilo = (await d.get('ilos', job.iloId))!;
+  const chunkList = await Promise.all(job.chunkIds.map((id) => d.get('chunks', id)));
+  const pmap = new Map<string, Chunk>();
+  chunkList.forEach((c, i) => { if (c && c.status === 'active') pmap.set(`p${i + 1}`, c); });
+  const sectionId = sectionIdOf(lecture.id, ilo.id);
+  const now = Date.now();
 
   // ---- verify every point against its passage
   const keptIdx = new Map<number, number>(); // model index -> kept index
@@ -183,14 +280,16 @@ export async function generateSection(lecture: Lecture, ilo: Ilo, order: number)
     const c = pmap.get(p.passage_id);
     if (!c || !p.text.trim() || !quoteInPassage(p.quote, c.text)) return;
     keptIdx.set(i, points.length);
-    points.push({ text: p.text.trim(), quote: p.quote.trim(), chunkId: c.id, label: p.label?.trim() || undefined, visualItem: typeof p.visual_item === 'number' && p.visual_item >= 0 ? p.visual_item : undefined });
+    points.push({
+      text: p.text.trim(), quote: p.quote.trim(), chunkId: c.id, label: p.label?.trim() || undefined,
+      visualItem: typeof p.visual_item === 'number' && p.visual_item >= 0 ? p.visual_item : undefined,
+      stressed: p.stressed || undefined,
+    });
   });
   if (points.length === 0) {
-    await d.put('sections', { ...empty, intro: 'The lesson for this outcome could not be checked against the slides, so it was not shown. It will be retried later.' });
-    notifyChange();
-    return empty;
+    return saveEmpty(lecture, ilo, job.order, 'The lesson for this outcome could not be checked against the slides and transcript, so it was not shown. It will be retried later.');
   }
-  const chunkById = new Map(passages.map((c) => [c.id, c]));
+  const chunkById = new Map([...pmap.values()].map((c) => [c.id, c]));
 
   // ---- questions
   const items: Item[] = [];
@@ -246,18 +345,20 @@ export async function generateSection(lecture: Lecture, ilo: Ilo, order: number)
     ? { kind: out.visual.kind, title: out.visual.title, columns: out.visual.columns ?? [], items: out.visual.items.slice(0, 8) }
     : { kind: 'none', title: '', columns: [], items: [] };
 
+  const aimIds = new Set(job.aimIds);
   const section: LearnSection = {
-    id: sectionId, moduleId: lecture.moduleId, lectureId: lecture.id, iloId: ilo.id, order,
-    title: out.title?.trim() || ilos.find((i) => i.id === ilo.id)?.text.slice(0, 60) || ilo.id,
+    id: sectionId, moduleId: lecture.moduleId, lectureId: lecture.id, iloId: ilo.id, order: job.order,
+    title: out.title?.trim() || ilo.text.slice(0, 60) || ilo.id,
     intro: out.intro?.trim() ?? '', points, visual,
-    chunkIds: [...new Set(points.map((p) => p.chunkId))], itemIds: items.map((i) => i.id), updatedAt: Date.now(), v: 2,
+    aims: (out.module_aims ?? []).filter((a) => aimIds.has(a)),
+    chunkIds: [...new Set(points.map((p) => p.chunkId))], itemIds: items.map((i) => i.id), updatedAt: Date.now(), v: SECTION_V,
   };
   // rewriting an unstarted older-format section: retire its unanswered questions
   const old = await d.get('sections', sectionId);
   const tx = d.transaction(['sections', 'items'], 'readwrite');
   for (const id of old?.itemIds ?? []) {
     const it = await tx.objectStore('items').get(id);
-    if (it && it.seenCount === 0 && it.status === 'active') await tx.objectStore('items').put({ ...it, status: 'retired', flagReason: 'Lesson rewritten step by step' });
+    if (it && it.seenCount === 0 && it.status === 'active') await tx.objectStore('items').put({ ...it, status: 'retired', flagReason: 'Lesson rewritten' });
   }
   for (const it of items) await tx.objectStore('items').put(it);
   await tx.objectStore('sections').put(section);
@@ -266,8 +367,28 @@ export async function generateSection(lecture: Lecture, ilo: Ilo, order: number)
   return section;
 }
 
+export async function generateSection(lecture: Lecture, ilo: Ilo, order: number): Promise<LearnSection> {
+  const job = await prepareSection(lecture, ilo, order);
+  if (!('call' in job)) return job;
+  return finishSection(job, await callJSON<LearnOut>(job.call));
+}
+
 export async function sectionsFor(lectureId: string): Promise<LearnSection[]> {
   return (await (await db()).getAllFromIndex('sections', 'byLecture', lectureId)).sort((a, b) => a.order - b.order);
+}
+
+/**
+ * The ILOs of a lecture that still need a section written: missing ones, and ones written in an older
+ * format (or before the lecture had material) that you haven't started, which are rewritten.
+ */
+export async function sectionsToWrite(lecture: Lecture, pendingInBatch: Set<string> = new Set()): Promise<string[]> {
+  const ilos = new Set((await byModule('ilos', lecture.moduleId)).map((i) => i.id));
+  const existing = await sectionsFor(lecture.id);
+  const answered = new Set((await byModule('attempts', lecture.moduleId)).map((a) => a.itemId));
+  const started = (s: LearnSection) => !!s.seenAt || !!s.readTo || s.itemIds.some((id) => answered.has(id));
+  const fresh = (s: LearnSection) => (s.v ?? 1) >= SECTION_V || started(s);
+  const have = new Set(existing.filter(fresh).map((s) => s.iloId));
+  return lecture.iloIds.filter((id) => ilos.has(id) && !have.has(id) && !pendingInBatch.has(`${lecture.id}|${id}`));
 }
 
 const generating = new Map<string, Promise<void>>();
@@ -275,17 +396,17 @@ const generating = new Map<string, Promise<void>>();
 /**
  * Make sure every ILO of the lecture has a section. The first missing one is awaited (so the lesson can
  * start); the rest are written in the background. Stops quietly if AI is unavailable or over the cap.
+ * Sections already queued in a half-price batch are left to it.
  */
 export async function ensureSections(lecture: Lecture): Promise<{ error?: string }> {
   if (generating.has(lecture.id)) return {};
+  const { pendingSectionIds } = await import('./batch');
+  const all = await sectionsToWrite(lecture);
+  if (!all.length) return {};
+  // the section you're about to read is written now even if it's queued in a batch (the batch then skips it)
+  const queued = await pendingSectionIds();
+  const todo = [all[0], ...all.slice(1).filter((id) => !queued.has(`${lecture.id}|${id}`))];
   const ilos = new Map((await byModule('ilos', lecture.moduleId)).map((i) => [i.id, i]));
-  const existing = await sectionsFor(lecture.id);
-  // sections written before step-by-step lessons are rewritten if you haven't started them
-  const answered = new Set((await byModule('attempts', lecture.moduleId)).map((a) => a.itemId));
-  const stale = (s: LearnSection) => (s.v ?? 1) < 2 && s.points.length > 0 && !s.seenAt && !s.readTo && !s.itemIds.some((id) => answered.has(id));
-  const have = new Set(existing.filter((s) => (s.points.length || s.intro.startsWith('No slides')) && !stale(s)).map((s) => s.iloId));
-  const todo = lecture.iloIds.filter((id) => !have.has(id) && ilos.has(id));
-  if (!todo.length) return {};
   let resolveFirst!: (e?: string) => void;
   const first = new Promise<string | undefined>((r) => (resolveFirst = r));
   const job = (async () => {
@@ -307,4 +428,16 @@ export async function ensureSections(lecture: Lecture): Promise<{ error?: string
 
 export function isGeneratingLecture(lectureId: string): boolean {
   return generating.has(lectureId);
+}
+
+/** Lessons you haven't started are rewritten next time (e.g. after the module-wide ILOs change). */
+export async function redoUnstartedSections(moduleId: string, lectureId?: string): Promise<number> {
+  const d = await db();
+  let n = 0;
+  for (const s of await byModule('sections', moduleId)) {
+    if (lectureId && s.lectureId !== lectureId) continue;
+    if ((s.v ?? 1) >= SECTION_V && !s.seenAt && !s.readTo) { await d.put('sections', { ...s, v: 2 }); n++; }
+  }
+  if (n) notifyChange();
+  return n;
 }

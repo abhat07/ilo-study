@@ -5,13 +5,20 @@ import type { IloCandidate } from '../ingest/ilo';
 import { topUpPool } from '../engine/generate';
 import { AiUnavailableError } from '../ai/client';
 import { pendingKey } from './Upload';
+import { moduleAims, setModuleAims } from '../plan/store';
+import { redoUnstartedSections } from '../learn/sections';
 import { Spinner, TopBar, go, useLive } from './common';
 import { Doodles } from './Doodles';
 
 interface Row extends IloCandidate {
   isNew: boolean;
   key: number;
+  /** a module-wide (overarching) ILO rather than one lecture's */
+  wide?: boolean;
 }
+
+/** Labels that mark an ILO as module-wide, e.g. "Module", "Overall", "Course aims". */
+const WIDE_LABEL = /(module|overall|overarching|course|programme|general|aims?)/i;
 
 let keySeq = 1;
 
@@ -27,9 +34,11 @@ export function IloConfirm({ moduleId }: { moduleId: string }) {
     (async () => {
       const existing = (await byModule('ilos', moduleId)).sort((a, b) => a.order - b.order);
       const pending = await kvGet<IloCandidate[]>(pendingKey(moduleId), []);
+      const aims = await moduleAims(moduleId);
       setRows([
+        ...aims.map((a) => ({ text: a.text, lecture: '', isNew: false, key: keySeq++, wide: true })),
         ...existing.map((i) => ({ text: i.text, lecture: i.lecture, chunkId: i.sourceChunkId, isNew: false, key: keySeq++ })),
-        ...pending.map((p) => ({ ...p, isNew: true, key: keySeq++ })),
+        ...pending.map((p) => ({ ...p, isNew: true, key: keySeq++, wide: WIDE_LABEL.test(p.lecture) && !/d/.test(p.lecture) })),
       ]);
     })();
   }, [moduleId]);
@@ -46,12 +55,12 @@ export function IloConfirm({ moduleId }: { moduleId: string }) {
       return a;
     });
 
-  const addPasted = () => {
+  const addPasted = (wide: boolean) => {
     const lines = paste
       .split('\n')
       .map((l) => l.replace(/^\s*(?:\d+[.)]|[-•*])\s*/, '').trim())
       .filter((l) => l.length > 3);
-    setRows((r) => [...(r ?? []), ...lines.map((text) => ({ text, lecture: '', isNew: true, key: keySeq++ }))]);
+    setRows((r) => [...(r ?? []), ...lines.map((text) => ({ text, lecture: '', isNew: true, key: keySeq++, wide }))]);
     setPaste('');
   };
 
@@ -70,10 +79,14 @@ export function IloConfirm({ moduleId }: { moduleId: string }) {
   };
 
   const confirmAll = async () => {
-    const list = (rows ?? []).map((r) => ({ ...r, text: r.text.trim() })).filter((r) => r.text.length > 3);
-    if (!list.length) return setErr('Add at least one ILO.');
+    const all = (rows ?? []).map((r) => ({ ...r, text: r.text.trim() })).filter((r) => r.text.length > 3);
+    const list = all.filter((r) => !r.wide);
+    if (!list.length) return setErr('Add at least one lecture ILO (module-wide ones are used alongside them).');
     setErr('');
     setBusy('Saving ILOs…');
+    const before = (await moduleAims(moduleId)).map((a) => a.text).join('|');
+    const aims = await setModuleAims(moduleId, mod?.short ?? moduleId, all.filter((r) => r.wide).map((r) => r.text));
+    if (aims.map((a) => a.text).join('|') !== before) await redoUnstartedSections(moduleId);
     await saveConfirmedIlos(moduleId, list);
     await kvSet(pendingKey(moduleId), []);
     setBusy('Matching passages to ILOs…');
@@ -120,6 +133,11 @@ export function IloConfirm({ moduleId }: { moduleId: string }) {
             These are the outcomes every question will be built on. Edit, reorder, delete or add — nothing is generated until
             you confirm. ILOs are copied from your files, not written by AI.
           </p>
+          <p class="muted small">
+            Tick <b>🧭 Module-wide ILO</b> for the module's overarching outcomes (the ones for the whole course, not one lecture).
+            They don't get lessons of their own: every lesson says which of them it feeds into and asks an essay-style question
+            connecting the two.
+          </p>
           {!rows && <Spinner />}
           {rows?.length === 0 && (
             <div class="notice small">
@@ -132,7 +150,7 @@ export function IloConfirm({ moduleId }: { moduleId: string }) {
           {rows?.map((r, i) => (
             <div class="ilo-row" key={r.key}>
               <div class="row spread small">
-                <span class="ilo-id">#{i + 1} {r.isNew && <span class="tag warn">new</span>}</span>
+                <span class="ilo-id">{r.wide ? "🧭" : `#${i + 1}`} {r.isNew && <span class="tag warn">new</span>}</span>
                 <span class="row">
                   <button class="btn sm" aria-label="Move up" onClick={() => move(r.key, -1)}>↑</button>
                   <button class="btn sm" aria-label="Move down" onClick={() => move(r.key, 1)}>↓</button>
@@ -140,20 +158,28 @@ export function IloConfirm({ moduleId }: { moduleId: string }) {
                 </span>
               </div>
               <textarea style={{ minHeight: '60px', marginTop: '6px' }} value={r.text} onInput={(e) => update(r.key, { text: e.currentTarget.value })} />
-              <input type="text" class="small" style={{ marginTop: '4px' }} placeholder="Lecture (optional)" value={r.lecture} onInput={(e) => update(r.key, { lecture: e.currentTarget.value })} />
+              <div class="row" style={{ marginTop: '4px', gap: '8px' }}>
+                {!r.wide && <input type="text" class="small" style={{ flex: '1' }} placeholder="Lecture (optional)" value={r.lecture} onInput={(e) => update(r.key, { lecture: e.currentTarget.value })} />}
+                <label class="small wide-toggle" title="An overarching outcome for the whole module. Lessons say how each lecture ILO feeds into it, and ask essay-style questions that connect them.">
+                  <input type="checkbox" checked={!!r.wide} onChange={(e) => update(r.key, { wide: e.currentTarget.checked })} /> 🧭 Module-wide ILO
+                </label>
+              </div>
             </div>
           ))}
           <details style={{ marginTop: '12px' }}>
             <summary>Paste or type ILOs</summary>
             <textarea placeholder="One ILO per line" value={paste} onInput={(e) => setPaste(e.currentTarget.value)} />
-            <button class="btn sm" style={{ marginTop: '6px' }} onClick={addPasted}>Add these</button>
+            <div class="row" style={{ marginTop: '6px' }}>
+              <button class="btn sm" onClick={() => addPasted(false)}>Add as lecture ILOs</button>
+              <button class="btn sm" onClick={() => addPasted(true)}>Add as 🧭 module-wide ILOs</button>
+            </div>
           </details>
           {err && <div class="err" style={{ marginTop: '10px' }}>{err}</div>}
           {busy ? (
             <div class="center muted small"><Spinner />{busy}</div>
           ) : (
             <button class="btn primary big" style={{ marginTop: '14px' }} disabled={!rows?.length} onClick={confirmAll}>
-              Confirm {rows?.length ?? 0} ILOs
+              Confirm {rows?.filter((r) => !r.wide).length ?? 0} ILOs{rows?.some((r) => r.wide) ? ` + ${rows.filter((r) => r.wide).length} module-wide` : ''}
             </button>
           )}
         </div>

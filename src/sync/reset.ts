@@ -13,8 +13,8 @@ import { replayCard } from '../engine/scheduler';
 
 export const RESET_KEY = 'progressResetAt';
 
-/** kv records the game keeps that sync between devices: reef picks and lectures, rest-day choices */
-export const isSyncedGameKey = (k: string) => k.startsWith('reef:') || k.startsWith('streak:');
+/** kv records that sync between devices: reef picks and lectures, rest-day choices, exam dates and module-wide ILOs */
+export const isSyncedGameKey = (k: string) => k.startsWith('reef:') || k.startsWith('streak:') || k.startsWith('plan:');
 
 export async function progressResetAt(): Promise<number> {
   return kvGet<number>(RESET_KEY, 0);

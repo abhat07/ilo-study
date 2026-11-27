@@ -807,3 +807,59 @@ select { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); 
 @media (max-width: 480px) { .rchip { font-size: 0.7rem; padding: 3px 7px; } }
 @media (prefers-reduced-motion: reduce) { .gift-btn { animation: none; } }
 @keyframes rfAppear { from { opacity: 0; } }
+
+/* ============ Sources: slides vs the lecturer's words ============ */
+.src-chip.spoken { background: rgba(250, 204, 21, 0.14); color: #fbbf24; border-color: rgba(250, 204, 21, 0.35); }
+.source.spoken { border-left-color: #fbbf24; font-style: italic; }
+.source .src-who { font-style: normal; font-weight: 700; font-size: 0.78rem; color: #fbbf24; margin-bottom: 4px; }
+.stressed { margin-left: 8px; vertical-align: middle; font-size: 0.7rem; }
+.aim-line { color: var(--brand-2); }
+.tr-btn { cursor: pointer; color: var(--brand-2); font-weight: 700; white-space: nowrap; }
+.tr-btn:hover { text-decoration: underline; }
+.tr-btn.have { color: var(--ok); font-weight: 600; }
+.wide-toggle { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; cursor: pointer; }
+.wide-toggle input { width: auto; margin: 0; }
+.aims li { margin-bottom: 8px; }
+
+/* ============ Exam plan ============ */
+.countdowns { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 8px 0; }
+.cd { background: var(--card-2); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; }
+.cd b { font-size: 1.9rem; font-weight: 900; line-height: 1; color: var(--brand-2); }
+.cd span { font-weight: 700; font-size: 0.86rem; }
+.cd small { color: var(--muted); font-size: 0.74rem; margin-top: 2px; }
+.cd.soon b { color: var(--warn); }
+.cd.past b { color: var(--ok); }
+.tasks { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.task { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; background: var(--card-2); border-radius: 12px; padding: 8px 10px; font-size: 0.88rem; }
+.task.exam { display: block; background: var(--warn-bg); color: var(--warn); }
+.plan-mod { margin: 10px 0; display: grid; gap: 4px; }
+.cal { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+.cal li { display: grid; grid-template-columns: 64px 1fr; gap: 8px; align-items: start; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.cal li.today .cal-d b { color: var(--brand-2); }
+.cal li.examday { background: var(--warn-bg); border-radius: 10px; padding: 6px; }
+.cal-d { display: flex; flex-direction: column; font-size: 0.8rem; line-height: 1.2; }
+.cal-d span { color: var(--muted); font-size: 0.72rem; }
+.cal-t { display: flex; flex-wrap: wrap; gap: 4px; }
+.cal-chip { font-size: 0.74rem; padding: 3px 8px; border-radius: 999px; background: rgba(var(--brand-rgb), 0.12); color: var(--text, inherit); }
+.cal-chip.review { background: var(--ok-bg); color: var(--ok); }
+.cal-chip.exam { background: var(--warn); color: #1c1917; font-weight: 800; }
+.weak-list li { margin-bottom: 4px; }
+.exam-date { gap: 10px; margin-bottom: 8px; }
+.exam-date input { width: auto; }
+
+/* ============ Seasons and the weekly report ============ */
+.reef-note.season { background: rgba(127, 249, 255, 0.1); border-color: rgba(127, 249, 255, 0.3); }
+.reef-note.season.soft { opacity: 0.85; }
+.week-report .wk-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 8px 0; }
+.week-report .wk-stats div { background: var(--card-2); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; }
+.week-report .wk-stats b { font-size: 1.3rem; font-weight: 850; }
+.week-report .wk-stats span { font-size: 0.74rem; color: var(--muted); }
+.wk-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 6px; }
+.wk-days span { height: 30px; border-radius: 9px; background: var(--card-2); border: 1px solid var(--line); display: grid; place-items: center; }
+.wk-days span.some { background: rgba(var(--brand-rgb), 0.25); }
+.wk-days span.goal { background: var(--ok); border-color: var(--ok); color: #052e16; }
+.wk-days span.future { opacity: 0.4; border-style: dashed; }
+.wk-days i { font-style: normal; font-size: 0.72rem; font-weight: 800; }
+.wk-arrivals { margin-top: 8px; }
+.wk-arrival { display: inline-flex; flex-direction: column; align-items: center; width: 64px; text-align: center; }
+.wk-arrival small { font-size: 0.66rem; line-height: 1.1; color: var(--muted); }

@@ -11,7 +11,7 @@
  *  - items (questions): union; most severe status wins (retired > flagged > active); the FSRS
  *    schedule and seen-count are rebuilt from the merged answers when neither side has them all;
  *    duplicate questions generated on two devices for the same passage are retired if unanswered
- *  - kv: only cached explanations, the progress-reset time, reef records and rest-day choices are synced
+ *  - kv: only cached explanations, the progress-reset time, reef records, rest-day choices and plan: settings are synced
  *  - progress reset ("Start again"): the latest reset time wins; answers, sessions and disputes from before
  *    it are dropped and lesson reading progress recorded before it is cleared, on both sides, before merging
  *  - images (slide pictures, metadata only): union; removed wins; uploaded/pruned flags are kept once set
@@ -120,7 +120,7 @@ export function mergeSnapshots(a: Snapshot, b: Snapshot): Snapshot {
   const spend = unionBy(A.spend, B.spend, (s) => s.id);
   const genlog = unionBy(A.genlog, B.genlog, (g) => g.cacheKey, (x, y) => (y.accepted > x.accepted ? y : x));
   const events = unionBy(A.events, B.events, (e) => e.id);
-  const synced = (k: { key: string }) => k.key.startsWith('explain:') || k.key.startsWith('reef:') || k.key.startsWith('streak:');
+  const synced = (k: { key: string }) => k.key.startsWith('explain:') || k.key.startsWith('reef:') || k.key.startsWith('streak:') || k.key.startsWith('plan:');
   const kv = unionBy(A.kv.filter(synced), B.kv.filter(synced), (k) => k.key);
   if (R) kv.push({ key: RESET_KEY, value: R });
 

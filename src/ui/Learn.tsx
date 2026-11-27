@@ -11,10 +11,12 @@ import { byModule, db, notifyChange } from '../db';
 import type { Ilo, Item, LearnSection, Lecture } from '../types';
 import { endSession, startSession, type SessionCtx } from '../engine/session';
 import { buildLectures } from '../learn/lectures';
-import { ensureSections, isGeneratingLecture } from '../learn/sections';
+import { ensureSections, isGeneratingLecture, isTranscript } from '../learn/sections';
+import { TranscriptButton } from './Transcript';
+import { moduleAims } from '../plan/store';
 import { CORRECT, fmtMin, latestScores, lectureMinutes, lectureState, liveItems, nextLessonStep, paceFrom, readToOf, sectionState } from '../learn/progress';
 import { renderStoredPdfPage } from '../ingest/extract';
-import { locatorLabel } from '../ingest/text';
+import { fmtTime, locatorLabel } from '../ingest/text';
 import { ensureBlob, syncNow } from '../sync/sync';
 import { achievements, loadGame, type GameState } from '../engine/game';
 import { Spinner, TopBar, go, useLive } from './common';
@@ -366,6 +368,11 @@ function LessonRail({ data, lecture, st, currentId, onOpen }: { data: Data; lect
           ))}
         </ol>
       </div>
+      <div class="rail-card">
+        <div class="rail-h">Sources</div>
+        <div class="small muted">Lessons are built from the slides and the lecturer's words in the recording transcript.</div>
+        <div style={{ marginTop: '6px' }}><TranscriptButton lecture={lecture} /></div>
+      </div>
     </aside>
   );
 }
@@ -394,6 +401,7 @@ function StepCard({ section, index, ilo, questions, onNext }: { section: LearnSe
         <>
           <h2 class="ex-title">{section.title}</h2>
           {ilo && <div class="ilo-line">ILO: {ilo.text}</div>}
+          <AimsLine section={section} />
           {section.intro && <p class="ex-intro">{section.intro}</p>}
         </>
       )}
@@ -401,10 +409,9 @@ function StepCard({ section, index, ilo, questions, onNext }: { section: LearnSe
         {section.points.map((_, k) => <span key={k} class={k < index ? 'read' : k === index ? 'now' : ''} />)}
       </div>
       <div class="step-k">Step {index + 1} of {n}</div>
-      <h3 class="step-label">{label}</h3>
+      <h3 class="step-label">{label}{p.stressed && <span class="tag warn stressed" title="The lecturer stressed this in the recording">⭐ Lecturer stressed this</span>}</h3>
       <p class="step-text">{p.text}</p>
-      <button class="src-chip" onClick={() => setQuote(!quote)} aria-expanded={quote}>source</button>
-      {quote && <div class="source small">“<mark>{p.quote}</mark>”</div>}
+      <SourceQuote chunkId={p.chunkId} quote={p.quote} open={quote} onToggle={() => setQuote(!quote)} />
       <Visual v={section.visual} active={p.visualItem} />
       <ChunkSlide chunkId={p.chunkId} />
       {index > 0 && (
@@ -417,6 +424,33 @@ function StepCard({ section, index, ilo, questions, onNext }: { section: LearnSe
         {questions ? `Got it: question on ${label} →` : nextLabel ? `Next: ${nextLabel} →` : 'Finish this section →'}
       </button>
     </div>
+  );
+}
+
+/**
+ * Where a point comes from, and its verbatim quote: "📽 slide 12" for slides, "🎙 lecturer · 12:30" for
+ * the recording transcript (quoted as the lecturer's words).
+ */
+function SourceQuote({ chunkId, quote, open, onToggle }: { chunkId: string; quote: string; open: boolean; onToggle: () => void }) {
+  const src = useLive(async () => {
+    const d = await db();
+    const c = await d.get('chunks', chunkId);
+    if (!c) return null;
+    const f = await d.get('files', c.fileId);
+    return { spoken: isTranscript(f, c), where: c.locator.kind === 'time' ? fmtTime(c.locator.start) : locatorLabel(c.locator), file: c.fileName.replace(/\.[^.]+$/, '') };
+  }, [chunkId]);
+  const spoken = !!src?.spoken;
+  const chip = !src ? 'source' : spoken ? `🎙 lecturer${src.where.startsWith('section') ? '' : ` · ${src.where}`}` : `📽 ${src.where}`;
+  return (
+    <>
+      <button class={'src-chip' + (spoken ? ' spoken' : '')} onClick={onToggle} aria-expanded={open} title={src ? `${src.file} · ${src.where}` : undefined}>{chip}</button>
+      {open && (
+        <div class={'source small' + (spoken ? ' spoken' : '')}>
+          {spoken && <div class="src-who">🎙 In the lecture{src!.where.startsWith('section') ? '' : ` (${src!.where})`}:</div>}
+          “<mark>{quote}</mark>”
+        </div>
+      )}
+    </>
   );
 }
 
@@ -451,14 +485,14 @@ function ExplainCard({ section, ilo, onDone }: { section: LearnSection; ilo?: Il
       <div class="row small"><span class="tag">📖 Re-read</span>{ilo && <span class="tag ok">🎯 {ilo.id}</span>}</div>
       <h2 class="ex-title">{section.title}</h2>
       {ilo && <div class="ilo-line">ILO: {ilo.text}</div>}
+      <AimsLine section={section} />
       {section.intro && <p class="ex-intro">{section.intro}</p>}
       {section.points.length > 0 && (
         <ol class="ex-points">
           {section.points.map((p, i) => (
             <li key={i} style={{ '--i': i }}>
-              <span>{p.label && <b>{p.label}: </b>}{p.text}</span>
-              <button class="src-chip" onClick={() => setOpenQuote(openQuote === i ? null : i)} aria-expanded={openQuote === i}>source</button>
-              {openQuote === i && <div class="source small">“<mark>{p.quote}</mark>”</div>}
+              <span>{p.label && <b>{p.label}: </b>}{p.text}{p.stressed && <span class="tag warn stressed">⭐ stressed</span>}</span>
+              <SourceQuote chunkId={p.chunkId} quote={p.quote} open={openQuote === i} onToggle={() => setOpenQuote(openQuote === i ? null : i)} />
             </li>
           ))}
         </ol>
@@ -484,7 +518,7 @@ function SlideStrip({ section }: { section: LearnSection }) {
   if (!refs?.length) return null;
   return (
     <details class="slides" open>
-      <summary>From the slides ({refs.length})</summary>
+      <summary>From the slides and recording ({refs.length})</summary>
       <div class="slide-row">
         {refs.map(({ c, f, pics }) => (
           <SlideThumb
@@ -552,4 +586,12 @@ function LectureDone({ lecture, data, moduleId }: { lecture: Lecture; data: Data
       <button class="btn ghost" style={{ marginTop: '6px', width: '100%' }} onClick={() => go(`/m/${moduleId}`)}>All lectures</button>
     </div>
   );
+}
+
+/** The module-wide ILOs this section feeds into. */
+function AimsLine({ section }: { section: LearnSection }) {
+  const aims = useLive(() => moduleAims(section.moduleId), [section.moduleId]);
+  const mine = (aims ?? []).filter((a) => section.aims?.includes(a.id));
+  if (!mine.length) return null;
+  return <div class="ilo-line aim-line">{mine.map((a) => <div key={a.id}>🧭 Module-wide {a.id}: {a.text}</div>)}</div>;
 }

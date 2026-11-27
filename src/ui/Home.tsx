@@ -15,6 +15,8 @@ import { QUEST_XP, loadGame, type GameState } from '../engine/game';
 import { lectureOverview, nextLecture, type LectureRow } from '../learn/overview';
 import { loadReef, type ReefState } from '../reef/state';
 import { ReefCard } from './Reef';
+import { ExamCard } from './PlanPage';
+import { WeekReportHome } from './WeekReport';
 
 interface CardInfo {
   m: Module;
@@ -87,6 +89,10 @@ export function Home() {
             <div class="stat"><b>+{stats?.todayXp ?? 0}</b><span>XP today</span></div>
           </div>
         </div>
+
+        <WeekReportHome />
+
+        <ExamCard />
 
         {ai && !ai.ready && ai.reason !== 'offline' && (
           <div class="notice small">

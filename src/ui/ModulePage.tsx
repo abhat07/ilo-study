@@ -9,6 +9,7 @@ import type { Ilo } from '../types';
 import { Bar, TopBar, go, masteryColor, useLive } from './common';
 import { Doodles } from './Doodles';
 import { LectureList } from './LectureList';
+import { AimsCard, WriteAheadCard } from './PlanPage';
 
 async function load(moduleId: string) {
   const d = await db();
@@ -74,6 +75,10 @@ export function ModulePage({ moduleId }: { moduleId: string }) {
         </div>
 
         <LectureList moduleId={moduleId} />
+
+        <WriteAheadCard moduleId={moduleId} />
+
+        <AimsCard moduleId={moduleId} />
 
         <MasteryOverview rows={rows} />
 

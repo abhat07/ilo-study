@@ -10,7 +10,7 @@
  */
 
 export type Zone = 'swim' | 'drift' | 'sand' | 'plant' | 'big' | 'far';
-export type Source = 'pick' | 'lecture' | 'school' | 'streak';
+export type Source = 'pick' | 'lecture' | 'school' | 'streak' | 'season';
 
 export type Pattern =
   | { t: 'band'; x: number; w: number; c: string } // vertical band; x from -0.5 (tail) to 0.5 (nose)

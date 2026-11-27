@@ -10,6 +10,8 @@ import type { Module } from '../types';
 import { loadGame, xpForAttempt, type GameState } from '../engine/game';
 import { CORALS, LECTURE_SPECIALS, ORG, PICKS, SCHOOLS, STREAK_VISITORS, type CoralSpecies, type Organism } from './catalogue';
 import { rng } from './art';
+import { seasonStatus, type SeasonStatus } from './seasons';
+import { examDate } from '../plan/store';
 
 export const PICK_PREFIX = 'reef:pick:';
 export const LEC_PREFIX = 'reef:lec:';
@@ -46,6 +48,8 @@ export interface ReefState {
   game: GameState;
   polyps: number;
   creatures: number;
+  /** seasonal events: what's on now, what's next, and visitors earned */
+  season: SeasonStatus;
 }
 
 export const schoolFor = (moduleIndex: number) => SCHOOLS[moduleIndex % SCHOOLS.length];
@@ -117,6 +121,13 @@ export async function loadReef(game?: GameState): Promise<ReefState> {
   }
   for (const v of STREAK_VISITORS) if (g.streakInfo.longest >= v.streakAt!) add(v, 1, `${v.streakAt}-day streak`);
 
+  // seasonal visitors: reach your daily goal on enough days while an event runs
+  const exams = (await Promise.all(mods.map(async (m) => ({ short: m.short, date: await examDate(m.id) }))))
+    .filter((e) => e.date)
+    .map((e) => { const [y, mo, dd] = e.date.split('-').map(Number); return { short: e.short, at: new Date(y, mo - 1, dd).getTime() }; });
+  const season = seasonStatus(Date.now(), new Map(g.streakInfo.days.map((d) => [d.date, d.graded])), exams);
+  for (const p of season.progress) if (p.earned && !owned.has(p.ev.visitor.id)) add(p.ev.visitor, 1, `${p.ev.name} ${new Date(p.ev.from).getFullYear()}`);
+
   const pending: number[] = [];
   for (let L = 2; L <= g.level.level; L++) if (!picked.has(L)) pending.push(L);
 
@@ -128,6 +139,7 @@ export async function loadReef(game?: GameState): Promise<ReefState> {
     game: g,
     polyps: modules.reduce((s, m) => s + m.polyps, 0),
     creatures: list.reduce((s, o) => s + o.count, 0),
+    season,
   };
 }
 
